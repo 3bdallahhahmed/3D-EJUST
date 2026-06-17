@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, Environment, ContactShadows } from "@react-three/drei";
+import { useGLTF, Environment, ContactShadows, Html, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 
 // ─────────────────────────────────────────────────────────
@@ -11,11 +11,16 @@ const SUPABASE_URL = "https://gfswtgvsbvmuxywewxij.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmc3d0Z3ZzYnZtdXh5d2V3eGlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzE2MjMsImV4cCI6MjA5NTU0NzYyM30.nxUmHtA4vpQ1zlj-Ok0OJr5Ry0pHKHCMES0Amf7Jrug";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+function CarLoader() {
+  const { progress } = useProgress();
+  return <Html center><div style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: 24, whiteSpace: 'nowrap' }}>Loading 3D Assets: {progress.toFixed(0)}%</div></Html>;
+}
+
 // ═══════════════════════════════════════════════════════════
 // 3D F1 CAR COMPONENT
 // ═══════════════════════════════════════════════════════════
 function F1Model() {
-  const { scene } = useGLTF("/3D-EJUST/f1.glb");
+  const { scene } = useGLTF(import.meta.env.BASE_URL + "f1.glb");
   const groupRef = useRef();
 
   useEffect(() => {
@@ -180,6 +185,7 @@ export default function App() {
 
   async function handleUpdateOrderStatus(id, newStatus) {
     await supabase.from("orders").update({ status: newStatus }).eq("id", id);
+    fetchOrders(); // Force update UI manually, in case real-time isn't enabled
   }
 
   async function handleUpdateCMS(e) {
@@ -230,6 +236,7 @@ export default function App() {
       alert("Order submitted successfully!");
       setNewOrder({ name: "", phone: "", orderName: "", material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim(), notes: "", fileName: "" });
       setSelectedFile(null);
+      fetchOrders(); // Force update UI manually
     } catch (err) {
       alert("Failed to submit order.");
     }
@@ -375,7 +382,7 @@ export default function App() {
             shadow-mapSize-height={2048} 
             shadow-bias={-0.0001} 
           />
-          <Suspense fallback={null}>
+          <Suspense fallback={<CarLoader />}>
             <F1Model />
             <ContactShadows position={[0, -1, 0]} opacity={0.6} scale={15} blur={1.5} far={4} color="#000000" />
             <Environment preset="studio" />
