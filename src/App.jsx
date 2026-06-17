@@ -196,6 +196,13 @@ export default function App() {
     fetchOrders();
   }
 
+  async function handleUpdateWeight(id, weightStr) {
+    const weight = parseFloat(weightStr) || 0;
+    const price = weight * (parseFloat(config.price_per_gram) || 0);
+    await supabase.from("orders").update({ weightgrams: weight, pricepergram: config.price_per_gram, totalprice: price }).eq("id", id);
+    fetchOrders();
+  }
+
   // ── Validation Helpers ──
   function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -340,29 +347,45 @@ export default function App() {
                   <button className={`btn ${sortBy === "filesize" ? "btn-primary" : ""}`} style={{ padding: "8px 16px", fontSize: 13, ...(sortBy !== "filesize" ? { background: "#fff", border: "2px solid #E5E5EA", color: "#000" } : {}) }} onClick={() => setSortBy("filesize")}>File Size</button>
                 </div>
               </div>
-              {getSortedOrders().map(o => (
-                <div key={o.id} style={{ padding: 24, border: "2px solid var(--border-light)", borderRadius: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{fontSize: 20, fontWeight: 800}}>{o.ordername} <span style={{fontSize: 12, background: "#000", color: "#fff", padding: "4px 8px", borderRadius: 4, verticalAlign: "middle"}}>{o.status.toUpperCase()}</span></div>
-                    <div style={{color: "var(--text-secondary)", marginTop: 8}}>{o.name} &bull; {o.phone}{o.email ? ` &bull; ${o.email}` : ""}</div>
-                    <div style={{fontSize: 14, fontWeight: 600, marginTop: 4}}>{o.material} ({o.color})</div>
-                    <div style={{fontSize: 12, color: "var(--text-secondary)", marginTop: 6}}>
-                      {o.created_at && <span>Received: {new Date(o.created_at).toLocaleString()} &bull; </span>}
-                      {o.weightgrams > 0 && <span>Weight: {o.weightgrams}g &bull; </span>}
-                      {o.filesize > 0 && <span>File: {(o.filesize / 1024).toFixed(0)} KB</span>}
+              {getSortedOrders().map(o => {
+                const calculatedPrice = (o.weightgrams || 0) * (parseFloat(config.price_per_gram) || 0);
+                return (
+                <div key={o.id} style={{ padding: 24, border: "2px solid var(--border-light)", borderRadius: 12, marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{fontSize: 20, fontWeight: 800}}>{o.ordername} <span style={{fontSize: 12, background: "#000", color: "#fff", padding: "4px 8px", borderRadius: 4, verticalAlign: "middle"}}>{o.status.toUpperCase()}</span></div>
+                      <div style={{color: "var(--text-secondary)", marginTop: 8}}>{o.name} &bull; {o.phone}{o.email ? ` &bull; ${o.email}` : ""}</div>
+                      <div style={{fontSize: 14, fontWeight: 600, marginTop: 4}}>{o.material} ({o.color})</div>
+                      <div style={{fontSize: 12, color: "var(--text-secondary)", marginTop: 6}}>
+                        {o.created_at && <span>Received: {new Date(o.created_at).toLocaleString()} &bull; </span>}
+                        {o.filesize > 0 && <span>File: {(o.filesize / 1024).toFixed(0)} KB</span>}
+                      </div>
+                    </div>
+                    <div style={{display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap"}}>
+                      <select value={o.status} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)} style={{width: 150, padding: 12}}>
+                        <option value="queued">Queued</option>
+                        <option value="printing">Printing</option>
+                        <option value="done">Done</option>
+                      </select>
+                      {o.fileurl && <a href={o.fileurl} download target="_blank" rel="noreferrer" className="btn btn-accent" style={{padding: "12px 24px"}}>Download STL</a>}
+                      <button onClick={() => handleDeleteOrder(o.id)} style={{ padding: "12px 24px", background: "#FF3B30", color: "#fff", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.2s" }}>Delete</button>
                     </div>
                   </div>
-                  <div style={{display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap"}}>
-                    <select value={o.status} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)} style={{width: 150, padding: 12}}>
-                      <option value="queued">Queued</option>
-                      <option value="printing">Printing</option>
-                      <option value="done">Done</option>
-                    </select>
-                    {o.fileurl && <a href={o.fileurl} download target="_blank" rel="noreferrer" className="btn btn-accent" style={{padding: "12px 24px"}}>Download STL</a>}
-                    <button onClick={() => handleDeleteOrder(o.id)} style={{ padding: "12px 24px", background: "#FF3B30", color: "#fff", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.2s" }}>Delete</button>
+                  {/* ── Pricing Row ── */}
+                  <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-light)", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <label style={{ margin: 0, whiteSpace: "nowrap" }}>Weight (g)</label>
+                      <input type="number" defaultValue={o.weightgrams || ""} placeholder="0" onBlur={(e) => handleUpdateWeight(o.id, e.target.value)} style={{ width: 100, padding: "8px 12px" }} />
+                    </div>
+                    <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>
+                      Rate: <strong style={{ color: "var(--text-primary)" }}>{config.price_per_gram} EGP/g</strong>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: "var(--accent)", marginLeft: "auto" }}>
+                      Total: {calculatedPrice.toFixed(2)} EGP
+                    </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </>
         )}
@@ -461,9 +484,6 @@ export default function App() {
           <p>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
             <a href="#order" className="btn btn-accent">Start Manufacturing</a>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              <span style={{ color: "var(--text-primary)" }}>{queuedOrdersCount}</span> In Queue
-            </div>
           </div>
         </section>
 
@@ -526,7 +546,15 @@ export default function App() {
         </section>
 
         <section id="track" className="section-container">
-          <h2>Telemetry & Tracking.</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
+            <h2 style={{ margin: 0 }}>Telemetry & Tracking.</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--bg-input)", padding: "12px 24px", borderRadius: "var(--radius-full)" }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--accent)", animation: "pulse 2s infinite" }} />
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                <span style={{ color: "var(--text-primary)", fontSize: 18, fontWeight: 900 }}>{queuedOrdersCount}</span> In Queue
+              </span>
+            </div>
+          </div>
           <p>Enter your phone number to check your manufacturing status in real-time.</p>
           <div style={{ display: "flex", gap: 16, marginBottom: 40 }}>
             <input value={trackSearch} onChange={e=>setTrackSearch(e.target.value)} placeholder="Phone number..." />
