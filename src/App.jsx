@@ -107,13 +107,15 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [newOrder, setNewOrder] = useState({ name: "", phone: "", orderName: "", material: "", color: "", notes: "", fileName: "" });
+  const [newOrder, setNewOrder] = useState({ name: "", phone: "", email: "", orderName: "", material: "", color: "", notes: "", fileName: "" });
   const [fileError, setFileError] = useState("");
+  const [formErrors, setFormErrors] = useState({});
   const [selectedFile, setSelectedFile] = useState(null);
   const [trackSearch, setTrackSearch] = useState("");
   const [trackResult, setTrackResult] = useState(null);
   const [adminTab, setAdminTab] = useState("orders"); // "orders" or "cms"
   const [savingCMS, setSavingCMS] = useState(false);
+  const [sortBy, setSortBy] = useState("date"); // "date", "weight", "filesize"
 
   // ── Initialize Config Defaults ──
   useEffect(() => {
@@ -185,7 +187,37 @@ export default function App() {
 
   async function handleUpdateOrderStatus(id, newStatus) {
     await supabase.from("orders").update({ status: newStatus }).eq("id", id);
-    fetchOrders(); // Force update UI manually, in case real-time isn't enabled
+    fetchOrders();
+  }
+
+  async function handleDeleteOrder(id) {
+    if (!window.confirm("Are you sure you want to delete this order? This cannot be undone.")) return;
+    await supabase.from("orders").delete().eq("id", id);
+    fetchOrders();
+  }
+
+  // ── Validation Helpers ──
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function isValidEgyptPhone(phone) {
+    // Egypt mobile: 01[0125] followed by 8 digits = 11 digits total
+    const cleaned = phone.replace(/[\s\-()]/g, "");
+    return /^01[0125]\d{8}$/.test(cleaned);
+  }
+
+  function getSortedOrders() {
+    const sorted = [...orders];
+    switch (sortBy) {
+      case "weight":
+        return sorted.sort((a, b) => (b.weightgrams || 0) - (a.weightgrams || 0));
+      case "filesize":
+        return sorted.sort((a, b) => (b.filesize || 0) - (a.filesize || 0));
+      case "date":
+      default:
+        return sorted.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    }
   }
 
   async function handleUpdateCMS(e) {
@@ -207,10 +239,15 @@ export default function App() {
   }
 
   async function handleOrderSubmit() {
-    if (!newOrder.name || !newOrder.phone || !selectedFile) {
-      alert("Please fill all required fields and upload an STL.");
-      return;
-    }
+    const errors = {};
+    if (!newOrder.name) errors.name = "Name is required.";
+    if (!newOrder.email) errors.email = "Email is required.";
+    else if (!isValidEmail(newOrder.email)) errors.email = "Please enter a valid email address.";
+    if (!newOrder.phone) errors.phone = "Phone is required.";
+    else if (!isValidEgyptPhone(newOrder.phone)) errors.phone = "Please enter a valid Egyptian phone number (e.g. 01012345678).";
+    if (!selectedFile) errors.file = "Please upload an STL file.";
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setIsUploading(true);
     try {
       const fileName = `${Date.now()}-${selectedFile.name}`;
@@ -220,12 +257,14 @@ export default function App() {
 
       const payload = { 
         name: newOrder.name, 
-        phone: newOrder.phone, 
+        phone: newOrder.phone.replace(/[\s\-()]/g, ""), 
+        email: newOrder.email, 
         ordername: newOrder.orderName, 
         material: newOrder.material, 
         color: newOrder.color, 
         notes: newOrder.notes, 
         fileurl: urlData.publicUrl, 
+        filesize: selectedFile.size, 
         status: "queued", 
         priority: queuedOrdersCount, 
         weightgrams: 0, 
@@ -234,7 +273,8 @@ export default function App() {
       await supabase.from("orders").insert([payload]);
       
       alert("Order submitted successfully!");
-      setNewOrder({ name: "", phone: "", orderName: "", material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim(), notes: "", fileName: "" });
+      setNewOrder({ name: "", phone: "", email: "", orderName: "", material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim(), notes: "", fileName: "" });
+      setFormErrors({});
       setSelectedFile(null);
       fetchOrders(); // Force update UI manually
     } catch (err) {
@@ -291,21 +331,35 @@ export default function App() {
               <div className="card"><h3>Completed</h3><p style={{fontSize: 32, margin: 0, fontWeight: 900, color: "#00c853"}}>{orders.filter(o=>o.status==="done").length}</p></div>
             </div>
             <div className="card">
-              <h3 style={{marginBottom: 24}}>Order Queue</h3>
-              {orders.map(o => (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+                <h3 style={{ margin: 0 }}>Order Queue</h3>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Sort by:</span>
+                  <button className={`btn ${sortBy === "date" ? "btn-primary" : ""}`} style={{ padding: "8px 16px", fontSize: 13, ...(sortBy !== "date" ? { background: "#fff", border: "2px solid #E5E5EA", color: "#000" } : {}) }} onClick={() => setSortBy("date")}>Date</button>
+                  <button className={`btn ${sortBy === "weight" ? "btn-primary" : ""}`} style={{ padding: "8px 16px", fontSize: 13, ...(sortBy !== "weight" ? { background: "#fff", border: "2px solid #E5E5EA", color: "#000" } : {}) }} onClick={() => setSortBy("weight")}>Weight</button>
+                  <button className={`btn ${sortBy === "filesize" ? "btn-primary" : ""}`} style={{ padding: "8px 16px", fontSize: 13, ...(sortBy !== "filesize" ? { background: "#fff", border: "2px solid #E5E5EA", color: "#000" } : {}) }} onClick={() => setSortBy("filesize")}>File Size</button>
+                </div>
+              </div>
+              {getSortedOrders().map(o => (
                 <div key={o.id} style={{ padding: 24, border: "2px solid var(--border-light)", borderRadius: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-                  <div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{fontSize: 20, fontWeight: 800}}>{o.ordername} <span style={{fontSize: 12, background: "#000", color: "#fff", padding: "4px 8px", borderRadius: 4, verticalAlign: "middle"}}>{o.status.toUpperCase()}</span></div>
-                    <div style={{color: "var(--text-secondary)", marginTop: 8}}>{o.name} &bull; {o.phone}</div>
+                    <div style={{color: "var(--text-secondary)", marginTop: 8}}>{o.name} &bull; {o.phone}{o.email ? ` &bull; ${o.email}` : ""}</div>
                     <div style={{fontSize: 14, fontWeight: 600, marginTop: 4}}>{o.material} ({o.color})</div>
+                    <div style={{fontSize: 12, color: "var(--text-secondary)", marginTop: 6}}>
+                      {o.created_at && <span>Received: {new Date(o.created_at).toLocaleString()} &bull; </span>}
+                      {o.weightgrams > 0 && <span>Weight: {o.weightgrams}g &bull; </span>}
+                      {o.filesize > 0 && <span>File: {(o.filesize / 1024).toFixed(0)} KB</span>}
+                    </div>
                   </div>
-                  <div style={{display: "flex", gap: 12, alignItems: "center"}}>
+                  <div style={{display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap"}}>
                     <select value={o.status} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)} style={{width: 150, padding: 12}}>
                       <option value="queued">Queued</option>
                       <option value="printing">Printing</option>
                       <option value="done">Done</option>
                     </select>
                     {o.fileurl && <a href={o.fileurl} download target="_blank" rel="noreferrer" className="btn btn-accent" style={{padding: "12px 24px"}}>Download STL</a>}
+                    <button onClick={() => handleDeleteOrder(o.id)} style={{ padding: "12px 24px", background: "#FF3B30", color: "#fff", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.2s" }}>Delete</button>
                   </div>
                 </div>
               ))}
@@ -423,10 +477,28 @@ export default function App() {
           <h2>Submit Payload.</h2>
           <div className="card">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
-              <div><label>Name</label><input value={newOrder.name} onChange={e=>setNewOrder(p=>({...p, name: e.target.value}))} placeholder="John Doe" /></div>
-              <div><label>Phone</label><input value={newOrder.phone} onChange={e=>setNewOrder(p=>({...p, phone: e.target.value}))} placeholder="01X..." /></div>
+              <div>
+                <label>Name *</label>
+                <input value={newOrder.name} onChange={e=>setNewOrder(p=>({...p, name: e.target.value}))} placeholder="John Doe" style={formErrors.name ? {borderColor: '#FF3B30'} : {}} />
+                {formErrors.name && <div style={{color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600}}>{formErrors.name}</div>}
+              </div>
+              <div>
+                <label>Email *</label>
+                <input type="email" value={newOrder.email} onChange={e=>setNewOrder(p=>({...p, email: e.target.value}))} placeholder="you@example.com" style={formErrors.email ? {borderColor: '#FF3B30'} : {}} />
+                {formErrors.email && <div style={{color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600}}>{formErrors.email}</div>}
+              </div>
             </div>
-            <div style={{ marginBottom: 24 }}><label>Project Name</label><input value={newOrder.orderName} onChange={e=>setNewOrder(p=>({...p, orderName: e.target.value}))} placeholder="Intake Manifold" /></div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+              <div>
+                <label>Phone (Egypt) *</label>
+                <input value={newOrder.phone} onChange={e=>setNewOrder(p=>({...p, phone: e.target.value}))} placeholder="01012345678" style={formErrors.phone ? {borderColor: '#FF3B30'} : {}} />
+                {formErrors.phone && <div style={{color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600}}>{formErrors.phone}</div>}
+              </div>
+              <div>
+                <label>Project Name</label>
+                <input value={newOrder.orderName} onChange={e=>setNewOrder(p=>({...p, orderName: e.target.value}))} placeholder="Intake Manifold" />
+              </div>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
               <div>
                 <label>Material</label>
@@ -442,9 +514,10 @@ export default function App() {
               </div>
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label>STL File</label>
-              <input type="file" accept=".stl" onChange={handleFileChange} style={{ padding: "12px", border: "1px dashed var(--border-light)" }} />
-              {fileError && <div style={{ color: "red", fontSize: 12, marginTop: 8 }}>{fileError}</div>}
+              <label>STL File *</label>
+              <input type="file" accept=".stl" onChange={handleFileChange} style={{ padding: "12px", border: formErrors.file ? "2px dashed #FF3B30" : "1px dashed var(--border-light)" }} />
+              {fileError && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{fileError}</div>}
+              {formErrors.file && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{formErrors.file}</div>}
             </div>
             <button className="btn btn-accent" style={{ width: "100%", opacity: isUploading ? 0.7 : 1 }} disabled={isUploading} onClick={handleOrderSubmit}>
               {isUploading ? "Uploading Data..." : "Engage Manufacture"}
