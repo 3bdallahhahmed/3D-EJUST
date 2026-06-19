@@ -341,6 +341,7 @@ export default function App() {
   const [savingCMS, setSavingCMS] = useState(false);
   const [sortBy, setSortBy] = useState("date");
   const [successModal, setSuccessModal] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (config.materials && !newOrder.material) {
@@ -572,22 +573,22 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════
   if (hash === "#boss" && isAdmin) {
     return (
-      <div style={{ padding: 48, maxWidth: 1200, margin: "0 auto", background: "var(--bg-page)", minHeight: "100vh", position: "relative" }}>
+      <div className="admin-container">
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/><div className="bg-orb bg-orb-3"/></div>
         <div style={{ position: "relative", zIndex: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
+          <div className="admin-header">
             <h1 style={{ fontSize: 36, margin: 0 }}>Command Center</h1>
             <button className="btn btn-glass" onClick={handleAdminLogout}>Sign Out</button>
           </div>
 
-          <div style={{ display: "flex", gap: 10, marginBottom: 32 }}>
+          <div className="admin-tabs">
             <button className={`btn ${adminTab === "orders" ? "btn-primary" : "btn-glass"}`} onClick={() => setAdminTab("orders")}>Manage Orders</button>
             <button className={`btn ${adminTab === "cms" ? "btn-primary" : "btn-glass"}`} onClick={() => setAdminTab("cms")}>Edit Website</button>
           </div>
 
           {adminTab === "orders" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 32 }}>
+              <div className="admin-stats-grid">
                 <div className="card"><h3>Total Orders</h3><p style={{ fontSize: 36, margin: "8px 0 0", fontWeight: 900 }}>{orders.length}</p></div>
                 <div className="card"><h3>Printing Now</h3><p style={{ fontSize: 36, margin: "8px 0 0", fontWeight: 900, color: "var(--status-printing)" }}>{orders.filter(o => o.status === "printing").length}</p></div>
                 <div className="card"><h3>Completed</h3><p style={{ fontSize: 36, margin: "8px 0 0", fontWeight: 900, color: "var(--status-done)" }}>{orders.filter(o => o.status === "done").length}</p></div>
@@ -607,9 +608,9 @@ export default function App() {
                 {getSortedOrders().map(o => {
                   const calculatedPrice = (o.weightgrams || 0) * (parseFloat(config.price_per_gram) || 0);
                   return (
-                    <div key={o.id} style={{ padding: 24, border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", marginBottom: 12, background: "rgba(255,255,255,0.3)", backdropFilter: "blur(16px)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
-                        <div style={{ flex: 1, minWidth: 200 }}>
+                    <div key={o.id} className="admin-order-card">
+                      <div className="admin-order-layout">
+                        <div className="admin-order-info">
                           <div style={{ fontSize: 17, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                             {o.ordername || "Untitled"}
                             <span style={{ fontSize: 10, background: o.status === "done" ? "var(--status-done)" : o.status === "printing" ? "var(--status-printing)" : "var(--status-queued)", color: "#fff", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700 }}>{o.status.toUpperCase()}</span>
@@ -623,7 +624,7 @@ export default function App() {
                             {o.filesize > 0 && <span>{(o.filesize / 1024).toFixed(0)} KB</span>}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <div className="admin-order-actions">
                           <select value={o.status} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)} style={{ width: 130, padding: 10, fontSize: 13 }}>
                             <option value="queued">Queued</option>
                             <option value="printing">Printing</option>
@@ -637,7 +638,7 @@ export default function App() {
                           <button onClick={() => handleDeleteOrder(o.id)} style={{ padding: "8px 16px", background: "#FF3B30", color: "#fff", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Delete</button>
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border-glass)", flexWrap: "wrap" }}>
+                      <div className="admin-order-footer">
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <label style={{ margin: 0, whiteSpace: "nowrap" }}>Weight (g)</label>
                           <input type="number" defaultValue={o.weightgrams || ""} placeholder="0" onBlur={(e) => handleUpdateWeight(o.id, e.target.value)} style={{ width: 90, padding: "8px 12px", fontSize: 13 }} />
@@ -691,7 +692,7 @@ export default function App() {
       </div>
 
       {/* 3D Canvas */}
-      <div style={{ position: "absolute", top: 80, bottom: 400, left: 0, right: 0, zIndex: 1, pointerEvents: "none" }}>
+      <div className="canvas-wrapper">
         <div style={{ position: "sticky", top: 80, height: "calc(100vh - 80px)", width: "100%" }}>
           <Canvas
             shadows
@@ -712,13 +713,18 @@ export default function App() {
 
       {/* Navigation */}
       <nav className="header">
-        <a href="#home" className="logo" style={{ textDecoration: "none" }}><div className="logo-dot" /> {brandName}</a>
-        <div className="nav-links">
-          <a href="#why">Why Us</a>
-          <a href="#full-gallery">Gallery</a>
-          <a href="#order">Order</a>
-          <a href="#track">Track</a>
-          <a href="#contact">Contact</a>
+        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {brandName}</a>
+        <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
+          <span className={`hamburger ${mobileMenuOpen ? "open" : ""}`}>
+            <span /><span /><span />
+          </span>
+        </button>
+        <div className={`nav-links ${mobileMenuOpen ? "nav-open" : ""}`}>
+          <a href="#why" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
+          <a href="#full-gallery" onClick={() => setMobileMenuOpen(false)}>Gallery</a>
+          <a href="#order" onClick={() => setMobileMenuOpen(false)}>Order</a>
+          <a href="#track" onClick={() => setMobileMenuOpen(false)}>Track</a>
+          <a href="#contact" onClick={() => setMobileMenuOpen(false)}>Contact</a>
         </div>
       </nav>
 
@@ -787,7 +793,7 @@ export default function App() {
         <section id="order" className="section-container reveal">
           <h2>Place Your Order</h2>
           <div className="card">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+            <div className="form-row">
               <div>
                 <label>Name *</label>
                 <input value={newOrder.name} onChange={e => setNewOrder(p => ({ ...p, name: e.target.value }))} placeholder="Your name" style={formErrors.name ? { borderColor: '#FF3B30' } : {}} />
@@ -799,7 +805,7 @@ export default function App() {
                 {formErrors.email && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.email}</div>}
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+            <div className="form-row">
               <div>
                 <label>Phone (Egypt) *</label>
                 <input value={newOrder.phone} onChange={e => setNewOrder(p => ({ ...p, phone: e.target.value }))} placeholder="01012345678" style={formErrors.phone ? { borderColor: '#FF3B30' } : {}} />
@@ -810,7 +816,7 @@ export default function App() {
                 <input value={newOrder.orderName} onChange={e => setNewOrder(p => ({ ...p, orderName: e.target.value }))} placeholder="My Part" />
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+            <div className="form-row">
               <div>
                 <label>Material</label>
                 <select value={newOrder.material} onChange={e => setNewOrder(p => ({ ...p, material: e.target.value }))}>
@@ -850,7 +856,7 @@ export default function App() {
             </div>
           </div>
           <p>Enter your tracking code or phone number.</p>
-          <div style={{ display: "flex", gap: 12, marginBottom: 40 }}>
+          <div className="track-search-row">
             <input value={trackSearch} onChange={e => setTrackSearch(e.target.value)} placeholder="JP-XXXXXX or 01012345678" onKeyDown={e => e.key === "Enter" && handleTrackSearch()} />
             <button className="btn btn-primary" onClick={handleTrackSearch}>Search</button>
           </div>
@@ -890,7 +896,7 @@ export default function App() {
         <section id="contact" className="section-container reveal">
           <h2>Get In Touch</h2>
           <p>Need a custom order or have questions? We're here to help.</p>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div className="contact-buttons">
             <a href="https://wa.me/" target="_blank" rel="noreferrer" className="btn btn-accent" style={{ gap: 10 }}>
               <WhatsAppIcon /> WhatsApp
             </a>
