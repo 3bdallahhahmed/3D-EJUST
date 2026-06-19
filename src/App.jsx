@@ -7,8 +7,8 @@ import * as THREE from "three";
 // ─────────────────────────────────────────────────────────
 // Supabase
 // ─────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://gfswtgvsbvmuxywewxij.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmc3d0Z3ZzYnZtdXh5d2V3eGlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzE2MjMsImV4cCI6MjA5NTU0NzYyM30.nxUmHtA4vpQ1zlj-Ok0OJr5Ry0pHKHCMES0Amf7Jrug";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://gfswtgvsbvmuxywewxij.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmc3d0Z3ZzYnZtdXh5d2V3eGlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzE2MjMsImV4cCI6MjA5NTU0NzYyM30.nxUmHtA4vpQ1zlj-Ok0OJr5Ry0pHKHCMES0Amf7Jrug";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─────────────────────────────────────────────────────────
@@ -322,6 +322,7 @@ function FullGalleryView() {
 export default function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [orders, setOrders] = useState([]);
+  const [queuedOrdersCount, setQueuedOrdersCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [hash, setHash] = useState(window.location.hash);
   const [loginEmail, setLoginEmail] = useState("");
@@ -365,20 +366,23 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'site_config' }, fetchConfig)
       .subscribe();
     return () => supabase.removeChannel(sub);
-  }, []);
+  }, [isAdmin]);
 
   // Auto-load user's past orders if they exist
   useEffect(() => {
-    try {
-      const savedCodes = JSON.parse(localStorage.getItem("jp_tracking_codes") || "[]");
-      if (savedCodes.length > 0 && trackSearch === "" && !trackResults && orders.length > 0) {
-        const matches = orders.filter(o => savedCodes.includes(o.tracking_code));
-        if (matches.length > 0) {
-          setTrackResults(matches);
+    async function loadSavedOrders() {
+      try {
+        const savedCodes = JSON.parse(localStorage.getItem("jp_tracking_codes") || "[]");
+        if (savedCodes.length > 0 && trackSearch === "" && !trackResults) {
+          const { data } = await supabase.rpc("get_saved_orders", { codes: savedCodes });
+          if (data && data.length > 0) {
+            setTrackResults(data);
+          }
         }
-      }
-    } catch (e) { console.error(e); }
-  }, [orders]);
+      } catch (e) { console.error(e); }
+    }
+    loadSavedOrders();
+  }, []);
 
   // Scroll reveal
   useEffect(() => {
@@ -402,8 +406,12 @@ export default function App() {
   }, [hash]);
 
   async function fetchOrders() {
-    const { data } = await supabase.from("orders").select("*").order("createdat", { ascending: false });
-    if (data) setOrders(data);
+    if (isAdmin) {
+      const { data } = await supabase.from("orders").select("*").order("createdat", { ascending: false });
+      if (data) setOrders(data);
+    }
+    const { data: countData } = await supabase.rpc("get_queued_count");
+    if (countData !== null) setQueuedOrdersCount(countData);
   }
 
   async function fetchConfig() {
@@ -411,7 +419,7 @@ export default function App() {
     if (data && !error) setConfig(data);
   }
 
-  const queuedOrdersCount = orders.filter(o => o.status === "queued").length;
+
 
   async function handleAdminLogin() {
     setLoginError("");
@@ -540,13 +548,11 @@ export default function App() {
     setIsUploading(false);
   }
 
-  function handleTrackSearch() {
+  async function handleTrackSearch() {
     const q = trackSearch.trim().toLowerCase();
     if (!q) return;
-    const matches = orders.filter(o =>
-      o.tracking_code?.toLowerCase() === q || o.phone?.includes(q)
-    );
-    setTrackResults(matches.length > 0 ? matches : "NOT_FOUND");
+    const { data } = await supabase.rpc("search_orders", { q });
+    setTrackResults(data && data.length > 0 ? data : "NOT_FOUND");
   }
 
   // ═══════════════════════════════════════════════════════════
