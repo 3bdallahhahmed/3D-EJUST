@@ -401,7 +401,7 @@ export default function App() {
   }, [hash]);
 
   async function fetchOrders() {
-    const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("orders").select("*").order("createdat", { ascending: false });
     if (data) setOrders(data);
   }
 
@@ -449,7 +449,7 @@ export default function App() {
     switch (sortBy) {
       case "weight": return sorted.sort((a, b) => (b.weightgrams || 0) - (a.weightgrams || 0));
       case "filesize": return sorted.sort((a, b) => (b.filesize || 0) - (a.filesize || 0));
-      default: return sorted.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      default: return sorted.sort((a, b) => new Date(b.createdat || 0) - new Date(a.createdat || 0));
     }
   }
 
