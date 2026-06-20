@@ -94,8 +94,9 @@ function PrintScene() {
     const progress = Math.min(1, Math.max(0, window.scrollY / maxScroll));
 
     // Scale down and move right as user scrolls
+    const isMobile = window.innerWidth <= 768;
     const scale = 1 - progress * 0.4;
-    const posX = 2.5 + progress * 1;
+    const posX = isMobile ? 0 : (2.5 + progress * 1);
     const rotY = progress * Math.PI * 0.5;
 
     groupRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.08);
