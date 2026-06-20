@@ -1034,55 +1034,6 @@ export default function App() {
           </div>
         </section>
           </>
-        )}rget.value)} placeholder="JP-XXXXXX or 01012345678" onKeyDown={e => e.key === "Enter" && handleTrackSearch()} />
-            <button className="btn btn-primary" onClick={handleTrackSearch}>Search</button>
-          </div>
-
-          {trackResults === "NOT_FOUND" && (
-            <div className="card" style={{ textAlign: "center", padding: 40 }}>
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width: 48, height: 48, color: "var(--text-tertiary)", marginBottom: 16}}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              </div>
-              <p style={{ margin: 0 }}>No orders found. Double-check your tracking code or phone number.</p>
-            </div>
-          )}
-
-          {Array.isArray(trackResults) && trackResults.map(r => (
-            <div key={r.id} className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
-                <h3 style={{ margin: 0 }}>{r.ordername || "Untitled Order"}</h3>
-                {r.tracking_code && <CopyableCode code={r.tracking_code} />}
-              </div>
-              <StatusStepper status={r.status} />
-              <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginTop: 16, fontSize: 14, color: "var(--text-secondary)" }}>
-                <span>Material: <strong style={{ color: "var(--text-primary)" }}>{r.material}</strong></span>
-                <span>Color: <strong style={{ color: "var(--text-primary)" }}>{r.color}</strong></span>
-                {r.totalprice > 0 && <span>Price: <strong style={{ color: "var(--accent)" }}>{r.totalprice.toFixed(2)} EGP</strong></span>}
-              </div>
-            </div>
-          ))}
-        </section>
-
-        {/* ── ABOUT ── */}
-        <section id="about" className="section-container reveal">
-          <h2>About Us</h2>
-          <p>We're a team of student engineers passionate about bringing ideas to life. Our 3D printing setup is calibrated daily for optimal results — from functional prototypes to creative projects.</p>
-        </section>
-
-        {/* ── CONTACT ── */}
-        <section id="contact" className="section-container reveal">
-          <h2>Get In Touch</h2>
-          <p>Need a custom order or have questions? We're here to help.</p>
-          <div className="contact-buttons">
-            <a href="https://wa.me/" target="_blank" rel="noreferrer" className="btn btn-accent" style={{ gap: 10 }}>
-              <WhatsAppIcon /> WhatsApp
-            </a>
-            <a href="mailto:hello@justprint.com" className="btn btn-glass" style={{ gap: 10 }}>
-              <EmailIcon /> Email Us
-            </a>
-          </div>
-        </section>
-        </>
         )}
       </main>
 
