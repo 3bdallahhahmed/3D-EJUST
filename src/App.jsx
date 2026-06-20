@@ -192,6 +192,34 @@ const CubeIcon = () => (
 );
 
 // ═══════════════════════════════════════════════════════════
+// FLOATING 3D ICONS COMPONENT
+// ═══════════════════════════════════════════════════════════
+function FloatingIcons({ icons }) {
+  return (
+    <div className="floating-icons-container">
+      {icons.map((icon, idx) => (
+        <img
+          key={idx}
+          src={`/assets/icons/${icon.src}`}
+          className="floating-icon"
+          style={{
+            width: icon.size,
+            top: icon.top,
+            bottom: icon.bottom,
+            left: icon.left,
+            right: icon.right,
+            animation: `${icon.reverse ? 'floatIconReverse' : 'floatIcon'} ${icon.duration || '6s'} ease-in-out infinite alternate`,
+            animationDelay: icon.delay || '0s',
+            opacity: icon.opacity || 0.85
+          }}
+          alt=""
+        />
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // STATUS STEPPER
 // ═══════════════════════════════════════════════════════════
 function StatusStepper({ status }) {
@@ -739,6 +767,11 @@ export default function App() {
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
+          <FloatingIcons icons={[
+            { src: '1.png', size: 140, top: '15%', left: '-10%', delay: '0s', duration: '6s' },
+            { src: '2.png', size: 100, bottom: '20%', right: '-5%', delay: '1s', duration: '7s', reverse: true },
+            { src: '20.png', size: 80, top: '10%', right: '15%', delay: '2s', duration: '5s' }
+          ]} />
           <h1>{config.hero_title}</h1>
           <p>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -749,6 +782,10 @@ export default function App() {
 
         {/* ── WHY US ── */}
         <section id="why" className="section-container reveal">
+          <FloatingIcons icons={[
+            { src: '5.png', size: 120, top: '5%', right: '-8%', delay: '0.5s', duration: '6.5s' },
+            { src: '6.png', size: 90, bottom: '10%', left: '-5%', delay: '1.5s', duration: '5.5s', reverse: true }
+          ]} />
           <h2>{config.why_title}</h2>
           <p>{config.why_text}</p>
           <div className="feature-cards">
@@ -768,6 +805,10 @@ export default function App() {
 
         {/* ── GALLERY ── */}
         <section id="gallery" className="gallery-section reveal">
+          <FloatingIcons icons={[
+            { src: '22.png', size: 110, top: '20%', left: '-12%', delay: '1s', duration: '6s' },
+            { src: '7.png', size: 85, bottom: '15%', right: '-10%', delay: '0s', duration: '7s', reverse: true }
+          ]} />
           <div style={{ textAlign: "center", marginBottom: 56 }}>
             <h2>Our Work</h2>
             <p style={{ maxWidth: 500, margin: "0 auto" }}>Some of the parts we've printed. Your project could be next.</p>
@@ -797,6 +838,11 @@ export default function App() {
 
         {/* ── ORDER FORM ── */}
         <section id="order" className="section-container reveal">
+          <FloatingIcons icons={[
+            { src: '8.png', size: 150, top: '10%', left: '-15%', delay: '0.2s', duration: '8s' },
+            { src: '25.png', size: 95, bottom: '5%', right: '-8%', delay: '1s', duration: '6s', reverse: true },
+            { src: '9.png', size: 70, top: '40%', right: '-12%', delay: '2s', duration: '5s' }
+          ]} />
           <h2>Place Your Order</h2>
           <div className="card">
             <div className="form-row">

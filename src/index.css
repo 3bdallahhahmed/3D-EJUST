@@ -1433,3 +1433,30 @@ label {
     padding: 12px 24px;
   }
 }
+
+/* =============================================================
+   FLOATING 3D ICONS
+   ============================================================= */
+.floating-icons-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1; /* Behind section content but above bg */
+}
+
+.floating-icon {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.15));
+}
+
+@keyframes floatIcon {
+  0% { transform: translateY(0px) rotate(0deg); }
+  100% { transform: translateY(-40px) rotate(15deg); }
+}
+
+@keyframes floatIconReverse {
+  0% { transform: translateY(0px) rotate(0deg); }
+  100% { transform: translateY(40px) rotate(-15deg); }
+}
