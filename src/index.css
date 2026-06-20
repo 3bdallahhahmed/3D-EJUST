@@ -1440,7 +1440,7 @@ label {
 .floating-icons-container {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  overflow: visible;
   pointer-events: none;
   z-index: -1; /* Behind section content but above bg */
 }
