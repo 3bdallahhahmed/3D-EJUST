@@ -200,7 +200,7 @@ function FloatingIcons({ icons }) {
       {icons.map((icon, idx) => (
         <img
           key={idx}
-          src={`/assets/icons/${icon.src}`}
+          src={`${import.meta.env.BASE_URL}assets/icons/${icon.src}`}
           className="floating-icon"
           style={{
             width: icon.size,
