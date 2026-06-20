@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, Suspense, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment, Float, Html, useProgress, MeshTransmissionMaterial } from "@react-three/drei";
+import { Environment, Float, Html, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 
 // ─────────────────────────────────────────────────────────
@@ -241,36 +241,6 @@ function StatusStepper({ status }) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// SUCCESS MODAL
-// ═══════════════════════════════════════════════════════════
-function SuccessModal({ trackingCode, onClose }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    copyToClipboard(trackingCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width: 56, height: 56, color: "var(--status-done)", marginBottom: 16}}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        </div>
-        <h2>Order Submitted!</h2>
-        <p>Your order is in the queue. Use this tracking code to check your status.</p>
-        <div className="tracking-code-display" onClick={handleCopy}>
-          <div>
-            <div className="code">{trackingCode}</div>
-            <div className="copy-hint">{copied ? "✓ Copied!" : "Click to copy"}</div>
-          </div>
-        </div>
-        <button className="btn btn-primary" onClick={onClose} style={{ width: "100%" }}>Done</button>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════
 // COPYABLE CODE
 // ═══════════════════════════════════════════════════════════
 function CopyableCode({ code }) {
@@ -371,6 +341,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState("date");
   const [successModal, setSuccessModal] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [orderStep, setOrderStep] = useState(1);
 
   useEffect(() => {
     if (config.materials && !newOrder.material) {
@@ -419,7 +390,7 @@ export default function App() {
     }, { threshold: 0.08, rootMargin: "0px 0px -40px 0px" });
     document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
     return () => observer.disconnect();
-  });
+  }, []);
 
   // Handle cross-page hash scrolling
   useEffect(() => {
@@ -564,7 +535,8 @@ export default function App() {
         localStorage.setItem("jp_tracking_codes", JSON.stringify([...new Set(savedCodes)]));
       } catch (err) { console.error("Could not save tracking code", err); }
 
-      setSuccessModal(trackingCode);
+      setOrderStep(4);
+      setSuccessModal(trackingCode); // Keep this to pass the code to step 4 without modifying state structure too much
       setNewOrder({ name: newOrder.name, phone: newOrder.phone, email: newOrder.email, orderName: "", material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim(), notes: "", fileName: "" });
       setFormErrors({});
       setSelectedFiles([]);
@@ -763,7 +735,213 @@ export default function App() {
       </nav>
 
       <main>
-        {hash === "#full-gallery" ? <FullGalleryView /> : (
+        {hash === "#full-gallery" && <FullGalleryView />}
+        
+        {hash === "#order" && (
+          <section className="section-container animate-in" style={{ paddingTop: 140, minHeight: "100vh", position: "relative", zIndex: 10 }}>
+            <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 8 }}>{orderStep === 4 ? "Order Received!" : "Place Order"}</h1>
+              {orderStep < 4 && <p style={{ margin: 0 }}>Step {orderStep} of 3</p>}
+            </div>
+            
+            {orderStep < 4 && (
+              <div className="stepper" style={{ marginBottom: 40, maxWidth: 500, margin: "0 auto 40px" }}>
+                <div className={`stepper-step ${orderStep > 1 ? "completed" : ""} ${orderStep === 1 ? "active" : ""}`}>
+                  <div className="stepper-dot">{orderStep > 1 ? <CheckIcon /> : "1"}</div>
+                  <span className="stepper-label">Contact</span>
+                </div>
+                <div className={`stepper-line ${orderStep > 1 ? "filled" : ""}`} />
+                <div className={`stepper-step ${orderStep > 2 ? "completed" : ""} ${orderStep === 2 ? "active" : ""}`}>
+                  <div className="stepper-dot">{orderStep > 2 ? <CheckIcon /> : "2"}</div>
+                  <span className="stepper-label">Details</span>
+                </div>
+                <div className={`stepper-line ${orderStep > 2 ? "filled" : ""}`} />
+                <div className={`stepper-step ${orderStep > 3 ? "completed" : ""} ${orderStep === 3 ? "active" : ""}`}>
+                  <div className="stepper-dot">{orderStep > 3 ? <CheckIcon /> : "3"}</div>
+                  <span className="stepper-label">Review</span>
+                </div>
+              </div>
+            )}
+
+            <div className="card" style={{ maxWidth: 600, margin: "0 auto", width: "100%" }}>
+              {orderStep === 1 && (
+                <div className="animate-in">
+                  <div className="form-row">
+                    <div>
+                      <label>Name *</label>
+                      <input value={newOrder.name} onChange={e => setNewOrder(p => ({ ...p, name: e.target.value }))} placeholder="Your name" style={formErrors.name ? { borderColor: '#FF3B30' } : {}} />
+                      {formErrors.name && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.name}</div>}
+                    </div>
+                    <div>
+                      <label>Email *</label>
+                      <input type="email" value={newOrder.email} onChange={e => setNewOrder(p => ({ ...p, email: e.target.value }))} placeholder="you@example.com" style={formErrors.email ? { borderColor: '#FF3B30' } : {}} />
+                      {formErrors.email && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.email}</div>}
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div>
+                      <label>Phone (Egypt) *</label>
+                      <input value={newOrder.phone} onChange={e => setNewOrder(p => ({ ...p, phone: e.target.value }))} placeholder="01012345678" style={formErrors.phone ? { borderColor: '#FF3B30' } : {}} />
+                      {formErrors.phone && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.phone}</div>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+                    <button className="btn btn-accent" onClick={() => {
+                      const errors = {};
+                      if (!newOrder.name) errors.name = "Name is required.";
+                      if (!newOrder.email) errors.email = "Email is required.";
+                      else if (!isValidEmail(newOrder.email)) errors.email = "Please enter a valid email.";
+                      if (!newOrder.phone) errors.phone = "Phone is required.";
+                      else if (!isValidEgyptPhone(newOrder.phone)) errors.phone = "Enter a valid Egyptian number (e.g. 01012345678).";
+                      setFormErrors(errors);
+                      if (Object.keys(errors).length === 0) setOrderStep(2);
+                    }}>Next Step →</button>
+                  </div>
+                </div>
+              )}
+
+              {orderStep === 2 && (
+                <div className="animate-in">
+                  <div className="form-row">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label>Project Name</label>
+                      <input value={newOrder.orderName} onChange={e => setNewOrder(p => ({ ...p, orderName: e.target.value }))} placeholder="My Part" />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div>
+                      <label>Material</label>
+                      <select value={newOrder.material} onChange={e => setNewOrder(p => ({ ...p, material: e.target.value }))}>
+                        {config.materials.split(',').map(m => <option key={m}>{m.trim()}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Color</label>
+                      <select value={newOrder.color} onChange={e => setNewOrder(p => ({ ...p, color: e.target.value }))}>
+                        {config.colors.split(',').map(c => <option key={c}>{c.trim()}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 20 }}>
+                    <label>Notes / Special Instructions</label>
+                    <textarea value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Infill %, orientation, special requests..." rows="3" />
+                  </div>
+                  <div style={{ marginBottom: 24 }}>
+                    <label>STL or ZIP File(s) *</label>
+                    <input type="file" multiple accept=".stl,.zip" onChange={handleFileChange} style={{ padding: "14px", border: formErrors.file ? "2px dashed #FF3B30" : "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.3)" }} />
+                    {fileError && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{fileError}</div>}
+                    {formErrors.file && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{formErrors.file}</div>}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+                    <button className="btn btn-glass" onClick={() => setOrderStep(1)}>← Back</button>
+                    <button className="btn btn-accent" onClick={() => {
+                      const errors = {};
+                      if (selectedFiles.length === 0) errors.file = "Please upload at least one STL or ZIP file.";
+                      setFormErrors(errors);
+                      if (Object.keys(errors).length === 0) setOrderStep(3);
+                    }}>Review Order →</button>
+                  </div>
+                </div>
+              )}
+
+              {orderStep === 3 && (
+                <div className="animate-in">
+                  <h3 style={{ marginBottom: 16 }}>Order Summary</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24, padding: 20, background: 'rgba(255,255,255,0.4)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)' }}>
+                    <div><strong>Name:</strong> {newOrder.name}</div>
+                    <div><strong>Phone:</strong> {newOrder.phone}</div>
+                    <div><strong>Email:</strong> {newOrder.email}</div>
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-glass)' }}><strong>Project:</strong> {newOrder.orderName || "Untitled"}</div>
+                    <div><strong>Material:</strong> {newOrder.material} ({newOrder.color})</div>
+                    <div><strong>Files:</strong> {newOrder.fileName}</div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+                    <button className="btn btn-glass" onClick={() => setOrderStep(2)}>← Back</button>
+                    <button className="btn btn-primary" style={{ opacity: isUploading ? 0.7 : 1 }} disabled={isUploading} onClick={handleOrderSubmit}>
+                      {isUploading ? "Uploading..." : "Submit Order"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {orderStep === 4 && (
+                <div className="animate-in" style={{ textAlign: 'center', padding: "20px 0" }}>
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width: 64, height: 64, color: "var(--status-done)"}}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  </div>
+                  <h2 style={{ marginBottom: 12 }}>Upload Successful!</h2>
+                  <p>Your files have been securely uploaded to our print queue.</p>
+                  <p>Save this tracking code to check your order status:</p>
+                  
+                  <div className="tracking-code-display" style={{ margin: "24px auto", maxWidth: 300 }}>
+                    <span className="code">{successModal}</span>
+                  </div>
+                  
+                  <div style={{ marginTop: 32 }}>
+                    <a href="#track" className="btn btn-accent" style={{ width: "100%" }} onClick={() => setOrderStep(1)}>Go Track Your Order</a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {hash === "#track" && (
+          <section className="section-container animate-in" style={{ paddingTop: 140, minHeight: "100vh", position: "relative", zIndex: 10 }}>
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 12 }}>Track Your Order</h1>
+              <p>Enter your tracking code or phone number to see its status.</p>
+              <div className="queue-badge" style={{ marginTop: 16 }}>
+                <div className="live-dot" />
+                <span><strong>{queuedOrdersCount}</strong> in queue</span>
+              </div>
+            </div>
+            
+            <div className="card" style={{ maxWidth: 600, margin: "0 auto 40px", width: "100%" }}>
+              <div className="track-search-row" style={{ marginBottom: 0 }}>
+                <input value={trackSearch} onChange={e => setTrackSearch(e.target.value)} placeholder="Tracking Code (JP-...)" onKeyDown={e => e.key === "Enter" && handleTrackSearch()} />
+                <button className="btn btn-primary" onClick={handleTrackSearch}>Search</button>
+              </div>
+            </div>
+
+            <div style={{ maxWidth: 600, margin: "0 auto" }}>
+              {trackResults === "NOT_FOUND" && (
+                <div className="card animate-in" style={{ textAlign: "center", padding: 40 }}>
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width: 48, height: 48, color: "var(--text-tertiary)", marginBottom: 16}}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </div>
+                  <p style={{ margin: 0 }}>No orders found. Double-check your tracking code or phone number.</p>
+                </div>
+              )}
+
+              {Array.isArray(trackResults) && trackResults.map(r => (
+                <div key={r.id} className="card animate-in" style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
+                    <h3 style={{ margin: 0 }}>{r.ordername || "Untitled Order"}</h3>
+                    {r.tracking_code && <CopyableCode code={r.tracking_code} />}
+                  </div>
+                  <StatusStepper status={r.status} />
+                  <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginTop: 16, fontSize: 14, color: "var(--text-secondary)" }}>
+                    <span>Material: <strong style={{ color: "var(--text-primary)" }}>{r.material}</strong></span>
+                    <span>Color: <strong style={{ color: "var(--text-primary)" }}>{r.color}</strong></span>
+                    {r.totalprice > 0 && <span>Price: <strong style={{ color: "var(--accent)" }}>{r.totalprice.toFixed(2)} EGP</strong></span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="card" style={{ maxWidth: 600, margin: "40px auto 0", textAlign: "center", padding: 32 }}>
+              <h3 style={{ marginBottom: 16 }}>Need Help?</h3>
+              <p style={{ fontSize: 14, marginBottom: 24 }}>Contact us directly for support or special requests.</p>
+              <div className="contact-buttons" style={{ justifyContent: "center" }}>
+                <a href="https://wa.me/" target="_blank" rel="noreferrer" className="btn btn-accent"><WhatsAppIcon /> WhatsApp</a>
+                <a href="mailto:hello@justprint.com" className="btn btn-glass"><EmailIcon /> Email Us</a>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {(hash !== "#full-gallery" && hash !== "#order" && hash !== "#track") && (
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
@@ -836,80 +1014,27 @@ export default function App() {
           </div>
         </section>
 
-        {/* ── ORDER FORM ── */}
-        <section id="order" className="section-container reveal">
-          <FloatingIcons icons={[
-            { src: '8.png', size: 150, top: '10%', left: '-15%', delay: '0.2s', duration: '8s' },
-            { src: '25.png', size: 95, bottom: '5%', right: '-8%', delay: '1s', duration: '6s', reverse: true },
-            { src: '9.png', size: 70, top: '40%', right: '-12%', delay: '2s', duration: '5s' }
-          ]} />
-          <h2>Place Your Order</h2>
-          <div className="card">
-            <div className="form-row">
-              <div>
-                <label>Name *</label>
-                <input value={newOrder.name} onChange={e => setNewOrder(p => ({ ...p, name: e.target.value }))} placeholder="Your name" style={formErrors.name ? { borderColor: '#FF3B30' } : {}} />
-                {formErrors.name && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.name}</div>}
-              </div>
-              <div>
-                <label>Email *</label>
-                <input type="email" value={newOrder.email} onChange={e => setNewOrder(p => ({ ...p, email: e.target.value }))} placeholder="you@example.com" style={formErrors.email ? { borderColor: '#FF3B30' } : {}} />
-                {formErrors.email && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.email}</div>}
-              </div>
-            </div>
-            <div className="form-row">
-              <div>
-                <label>Phone (Egypt) *</label>
-                <input value={newOrder.phone} onChange={e => setNewOrder(p => ({ ...p, phone: e.target.value }))} placeholder="01012345678" style={formErrors.phone ? { borderColor: '#FF3B30' } : {}} />
-                {formErrors.phone && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.phone}</div>}
-              </div>
-              <div>
-                <label>Project Name</label>
-                <input value={newOrder.orderName} onChange={e => setNewOrder(p => ({ ...p, orderName: e.target.value }))} placeholder="My Part" />
-              </div>
-            </div>
-            <div className="form-row">
-              <div>
-                <label>Material</label>
-                <select value={newOrder.material} onChange={e => setNewOrder(p => ({ ...p, material: e.target.value }))}>
-                  {config.materials.split(',').map(m => <option key={m}>{m.trim()}</option>)}
-                </select>
-              </div>
-              <div>
-                <label>Color</label>
-                <select value={newOrder.color} onChange={e => setNewOrder(p => ({ ...p, color: e.target.value }))}>
-                  {config.colors.split(',').map(c => <option key={c}>{c.trim()}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label>Notes / Special Instructions</label>
-              <textarea value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Infill %, orientation, special requests..." rows="3" />
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              <label>STL or ZIP File(s) *</label>
-              <input type="file" multiple accept=".stl,.zip" onChange={handleFileChange} style={{ padding: "14px", border: formErrors.file ? "2px dashed #FF3B30" : "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.3)" }} />
-              {fileError && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{fileError}</div>}
-              {formErrors.file && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{formErrors.file}</div>}
-            </div>
-            <button className="btn btn-accent" style={{ width: "100%", opacity: isUploading ? 0.7 : 1 }} disabled={isUploading} onClick={handleOrderSubmit}>
-              {isUploading ? "Uploading..." : "Submit Order"}
-            </button>
-          </div>
+        {/* ── ABOUT ── */}
+        <section id="about" className="section-container reveal">
+          <h2>About Us</h2>
+          <p>We're a team of student engineers passionate about bringing ideas to life. Our 3D printing setup is calibrated daily for optimal results — from functional prototypes to creative projects.</p>
         </section>
 
-        {/* ── TRACK ── */}
-        <section id="track" className="section-container reveal">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
-            <h2 style={{ margin: 0 }}>Track Your Order</h2>
-            <div className="queue-badge">
-              <div className="live-dot" />
-              <span><strong>{queuedOrdersCount}</strong> in queue</span>
-            </div>
+        {/* ── CONTACT ── */}
+        <section id="contact" className="section-container reveal">
+          <h2>Get In Touch</h2>
+          <p>Need a custom order or have questions? We're here to help.</p>
+          <div className="contact-buttons">
+            <a href="https://wa.me/" target="_blank" rel="noreferrer" className="btn btn-accent" style={{ gap: 10 }}>
+              <WhatsAppIcon /> WhatsApp
+            </a>
+            <a href="mailto:hello@justprint.com" className="btn btn-glass" style={{ gap: 10 }}>
+              <EmailIcon /> Email Us
+            </a>
           </div>
-          <p>Enter your tracking code or phone number.</p>
-          <div className="track-search-row">
-            <input value={trackSearch} onChange={e => setTrackSearch(e.target.value)} placeholder="JP-XXXXXX or 01012345678" onKeyDown={e => e.key === "Enter" && handleTrackSearch()} />
+        </section>
+          </>
+        )}rget.value)} placeholder="JP-XXXXXX or 01012345678" onKeyDown={e => e.key === "Enter" && handleTrackSearch()} />
             <button className="btn btn-primary" onClick={handleTrackSearch}>Search</button>
           </div>
 
@@ -986,8 +1111,6 @@ export default function App() {
         </div>
         <div className="footer-bottom">&copy; {new Date().getFullYear()} {brandName}. All rights reserved.</div>
       </footer>
-
-      {successModal && <SuccessModal trackingCode={successModal} onClose={() => setSuccessModal(null)} />}
     </>
   );
 }

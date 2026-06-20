@@ -987,10 +987,15 @@ label {
    ============================================================= */
 @media (max-width: 768px) {
 
-  /* --- 3D Canvas: hide on tablet --- */
-  .canvas-wrapper,
+  /* --- 3D Canvas: adjust on tablet/mobile --- */
+  .canvas-wrapper {
+    top: 60px;
+    bottom: 0;
+    opacity: 0.85;
+    z-index: 0;
+  }
   .canvas-container {
-    display: none !important;
+    display: block;
   }
 
   /* --- Section container --- */
@@ -1459,4 +1464,11 @@ label {
 @keyframes floatIconReverse {
   0% { transform: translateY(0px) rotate(0deg); }
   100% { transform: translateY(40px) rotate(-15deg); }
+}
+
+/* Hide floating icons on mobile to let the 3D canvas shine */
+@media (max-width: 768px) {
+  .floating-icons-container {
+    display: none;
+  }
 }
