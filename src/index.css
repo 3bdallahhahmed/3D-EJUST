@@ -66,6 +66,7 @@ body {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
+  will-change: transform;
 }
 
 .bg-orb {
@@ -76,6 +77,8 @@ body {
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
   animation-direction: alternate;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .bg-orb-1 {
@@ -996,9 +999,11 @@ label {
   /* --- 3D Canvas: adjust on tablet/mobile --- */
   .canvas-wrapper {
     top: 60px;
-    bottom: 0;
-    opacity: 0.85;
+    bottom: auto;
+    height: 45vh;
+    opacity: 0.7;
     z-index: 0;
+    will-change: transform;
   }
   .canvas-container {
     display: block;

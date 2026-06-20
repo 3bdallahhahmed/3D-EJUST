@@ -95,12 +95,14 @@ function PrintScene() {
 
     // Scale down and move right as user scrolls
     const isMobile = window.innerWidth <= 768;
-    const scale = 1 - progress * 0.4;
+    const mobileScale = 0.55;
+    const scale = isMobile ? mobileScale : (1 - progress * 0.4);
     const posX = isMobile ? 0 : (2.5 + progress * 1);
+    const posY = isMobile ? 1.5 : 0;
     const rotY = progress * Math.PI * 0.5;
 
     groupRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.08);
-    groupRef.current.position.lerp(new THREE.Vector3(posX, 0, 0), 0.08);
+    groupRef.current.position.lerp(new THREE.Vector3(posX, posY, 0), 0.08);
     const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotY, 0));
     groupRef.current.quaternion.slerp(targetQuat, 0.08);
   });
@@ -247,14 +249,37 @@ function StatusStepper({ status }) {
 function CopyableCode({ code }) {
   const [copied, setCopied] = useState(false);
   function handleCopy() {
-    copyToClipboard(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    // Try modern API first, then fallback
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch(() => {
+        fallbackCopy(code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } else {
+      fallbackCopy(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
   }
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div onClick={handleCopy} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
       <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.05em" }}>{code}</span>
-      <button className="copy-btn" onClick={handleCopy}>{copied ? "✓ Copied" : "Copy"}</button>
+      <button className="copy-btn" onClick={(e) => { e.stopPropagation(); handleCopy(); }}>{copied ? "✓ Copied!" : "Tap to Copy"}</button>
     </div>
   );
 }
@@ -353,7 +378,14 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setIsAdmin(!!session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => setIsAdmin(!!session));
-    function checkHash() { setHash(window.location.hash); }
+    function checkHash() {
+      const newHash = window.location.hash;
+      // Reset order wizard when navigating away from #order
+      if (newHash !== "#order") {
+        setOrderStep(1);
+      }
+      setHash(newHash);
+    }
     window.addEventListener("hashchange", checkHash);
     return () => { subscription.unsubscribe(); window.removeEventListener("hashchange", checkHash); };
   }, []);
@@ -706,6 +738,7 @@ export default function App() {
             dpr={[1, 1.5]}
             camera={{ position: [0, 0, 7], fov: 40 }}
             gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
+            performance={{ min: 0.5 }}
           >
             <ambientLight intensity={0.5} />
             <directionalLight position={[10, 10, 5]} intensity={1.8} color="#ffffff" />
@@ -743,6 +776,7 @@ export default function App() {
             <div style={{ textAlign: "center", marginBottom: 32 }}>
               <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 8 }}>{orderStep === 4 ? "Order Received!" : "Place Order"}</h1>
               {orderStep < 4 && <p style={{ margin: 0 }}>Step {orderStep} of 3</p>}
+              {orderStep === 1 && <a href="#home" style={{ display: "inline-block", marginTop: 8, fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Cancel</a>}
             </div>
             
             {orderStep < 4 && (
@@ -874,12 +908,14 @@ export default function App() {
                   <p>Your files have been securely uploaded to our print queue.</p>
                   <p>Save this tracking code to check your order status:</p>
                   
-                  <div className="tracking-code-display" style={{ margin: "24px auto", maxWidth: 300 }}>
+                  <div className="tracking-code-display" onClick={() => { copyToClipboard(successModal); }} style={{ margin: "24px auto", maxWidth: 340, cursor: "pointer" }}>
                     <span className="code">{successModal}</span>
+                    <span className="copy-hint">Tap to copy</span>
                   </div>
                   
-                  <div style={{ marginTop: 32 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
                     <a href="#track" className="btn btn-accent" style={{ width: "100%" }} onClick={() => setOrderStep(1)}>Go Track Your Order</a>
+                    <a href="#home" className="btn btn-glass" style={{ width: "100%" }} onClick={() => setOrderStep(1)}>← Back to Home</a>
                   </div>
                 </div>
               )}
@@ -892,9 +928,12 @@ export default function App() {
             <div style={{ textAlign: "center", marginBottom: 40 }}>
               <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 12 }}>Track Your Order</h1>
               <p>Enter your tracking code or phone number to see its status.</p>
-              <div className="queue-badge" style={{ marginTop: 16 }}>
-                <div className="live-dot" />
-                <span><strong>{queuedOrdersCount}</strong> in queue</span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap", marginTop: 16 }}>
+                <div className="queue-badge">
+                  <div className="live-dot" />
+                  <span><strong>{queuedOrdersCount}</strong> in queue</span>
+                </div>
+                <a href="#home" style={{ fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Back to Home</a>
               </div>
             </div>
             
