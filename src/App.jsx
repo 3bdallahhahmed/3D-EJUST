@@ -1084,8 +1084,8 @@ export default function App() {
                           <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700 }}>{item.title}</h4>
                           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>{item.description || 'No description'}</p>
                           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                            <button className="btn btn-glass" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setEditingGalleryItem({...item})}>Edit</button>
-                            <button style={{ padding: '6px 12px', fontSize: 12, background: '#FF3B30', color: '#fff', border: 'none', borderRadius: 'var(--radius-full)', fontWeight: 700, cursor: 'pointer' }} onClick={() => handleDeleteGalleryItem(item)}>Delete</button>
+                            <button className="btn btn-glass" style={{ padding: '6px 12px', fontSize: 12 }} onClick={(e) => { e.stopPropagation(); setEditingGalleryItem({...item}); }}>Edit</button>
+                            <button style={{ padding: '6px 12px', fontSize: 12, background: '#FF3B30', color: '#fff', border: 'none', borderRadius: 'var(--radius-full)', fontWeight: 700, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleDeleteGalleryItem(item); }}>Delete</button>
                           </div>
                         </div>
                       </div>
