@@ -1,16 +1,51 @@
-# React + Vite
+# Centurai Print OS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A premium, high-performance web dashboard for managing 3D print farms. 
 
-Currently, two official plugins are available:
+Built with React, Vite, and Supabase, Centurai Print OS provides a centralized interface for tracking orders, assigning active jobs to hardware (e.g., CC Abdalla, CC Mazen), and offering customers a beautiful portal to check their order status.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ✨ Features
 
-## React Compiler
+- **Liquid Glass UI:** A stunning, modern design featuring glass-morphism, responsive CSS grid layouts, and smooth micro-animations.
+- **Admin Command Center:** A secure, Supabase-authenticated dashboard for full farm management.
+- **Intelligent Printer Allocation:** Automatically assign queued orders to available printers and track real-time machine status (Working/Resting).
+- **Public Order Tracking:** Customers can view the progress of their print jobs using a secure tracking code.
+- **CMS Integration:** Allows administrators to update site text, pricing, and configuration dynamically.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🚀 Tech Stack
 
-## Expanding the ESLint configuration
+- **Frontend:** React, Vite
+- **Styling:** Custom Vanilla CSS (no Tailwind, pure design flexibility)
+- **Backend/Database:** Supabase (PostgreSQL, Realtime, Auth, Storage)
+- **3D Rendering:** `@react-three/fiber` for abstract, immersive background elements.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ Getting Started
+
+To run the project locally for development:
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/3bdallahhahmed/3D-EJUST.git
+   cd 3D-EJUST
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment:**
+   Create a `.env` file in the root directory and add your Supabase credentials:
+   ```env
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+4. **Start the Development Server:**
+   ```bash
+   npm run dev
+   ```
+
+## 🤝 Contributing
+
+This project uses an **Environment-Based Branching** workflow. Direct pushes to the `main` branch are restricted. Please refer to [CONTRIBUTING.md](.github/CONTRIBUTING.md) for details on the development process.
