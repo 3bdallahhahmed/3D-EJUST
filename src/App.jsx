@@ -11,6 +11,9 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://gfswtgvsbvmux
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_ORiX5qWkvIQLrG17DIuvIQ_hgFm971W";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const PRINTERS = ["CC Abdalla", "CC Mazen"];
+const VALID_HASHES = ["", "#home", "#order", "#track", "#full-gallery", "#boss", "#why", "#about", "#contact", "#gallery"];
+
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
@@ -30,6 +33,26 @@ function copyToClipboard(text) {
     document.execCommand("copy");
     document.body.removeChild(ta);
   });
+}
+
+// ─────────────────────────────────────────────────────────
+// Printer helpers — parse/set printer tag in notes field
+// ─────────────────────────────────────────────────────────
+function getPrinterFromNotes(notes) {
+  if (!notes) return null;
+  const match = notes.match(/^\[PRINTER:([^\]]+)\]/);
+  return match ? match[1] : null;
+}
+
+function setPrinterInNotes(notes, printer) {
+  const cleanNotes = (notes || "").replace(/^\[PRINTER:[^\]]+\]\s*/, "");
+  if (!printer) return cleanNotes;
+  return `[PRINTER:${printer}] ${cleanNotes}`.trim();
+}
+
+function getCleanNotes(notes) {
+  if (!notes) return "";
+  return notes.replace(/^\[PRINTER:[^\]]+\]\s*/, "");
 }
 
 // ─────────────────────────────────────────────────────────
@@ -178,6 +201,12 @@ function PrintScene() {
 // ═══════════════════════════════════════════════════════════
 // SVG ICONS
 // ═══════════════════════════════════════════════════════════
+const EyeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+);
+const EyeSlashIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+);
 const InstagramIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
 );
@@ -285,6 +314,40 @@ function CopyableCode({ code }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// 404 NOT FOUND PAGE
+// ═══════════════════════════════════════════════════════════
+function NotFoundPage() {
+  const [countdown, setCountdown] = useState(5);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.hash = "#home";
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <section className="not-found-container animate-in">
+      <div className="not-found-card">
+        <div className="not-found-number">404</div>
+        <h2 style={{ marginBottom: 12 }}>Page Not Found</h2>
+        <p style={{ marginBottom: 16 }}>The page you're looking for doesn't exist or has been moved.</p>
+        <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 24 }}>
+          Redirecting to home in <strong style={{ color: 'var(--accent)', fontSize: 18 }}>{countdown}</strong> seconds…
+        </p>
+        <a href="#home" className="btn btn-accent">← Go Home Now</a>
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // MAIN APPLICATION
 // ═══════════════════════════════════════════════════════════
 
@@ -297,7 +360,12 @@ const DEFAULT_CONFIG = {
   why_text: "We're students who love making things. Our setup is tuned for speed and precision, so you get your parts fast without breaking the bank. PLA, PETG, TPU — we've got what you need.",
   price_per_gram: 3,
   materials: "PLA, PETG, ABS, Carbon Fiber, TPU",
-  colors: "McLaren Orange, Carbon Black, White, Silver, Red"
+  colors: "McLaren Orange, Carbon Black, White, Silver, Red",
+  whatsapp_number: "",
+  instagram_link: "",
+  email_address: "",
+  show_socials: true,
+  privacy_policy: ""
 };
 
 function FullGalleryView() {
@@ -368,9 +436,10 @@ export default function App() {
   const [successModal, setSuccessModal] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [orderStep, setOrderStep] = useState(1);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
 
   useEffect(() => {
-    if (config.materials && !newOrder.material) {
+    if (config.materials && config.colors && !newOrder.material) {
       setNewOrder(p => ({ ...p, material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim() }));
     }
   }, [config]);
@@ -416,14 +485,17 @@ export default function App() {
     loadSavedOrders();
   }, []);
 
-  // Scroll reveal
+  // Scroll reveal — re-run when hash/admin changes so newly-rendered sections get observed
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add("active"); });
     }, { threshold: 0.08, rootMargin: "0px 0px -40px 0px" });
-    document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
+    // Small delay ensures the DOM has rendered new sections after a state change
+    const timer = setTimeout(() => {
+      document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
+    }, 100);
+    return () => { clearTimeout(timer); observer.disconnect(); };
+  }, [hash, isAdmin]);
 
   // Handle cross-page hash scrolling
   useEffect(() => {
@@ -441,6 +513,8 @@ export default function App() {
     if (isAdmin) {
       const { data } = await supabase.from("orders").select("*").order("createdat", { ascending: false });
       if (data) setOrders(data);
+    } else {
+      setOrders([]);
     }
     const { data: countData } = await supabase.rpc("get_queued_count");
     if (countData !== null) setQueuedOrdersCount(countData);
@@ -464,8 +538,18 @@ export default function App() {
     window.location.hash = "";
   }
 
-  async function handleUpdateOrderStatus(id, newStatus) {
-    await supabase.from("orders").update({ status: newStatus }).eq("id", id);
+  async function handleUpdateOrderStatus(id, newStatus, printer) {
+    const updateData = { status: newStatus };
+    const order = orders.find(o => o.id === id);
+    if (order) {
+      if (newStatus === "printing" && printer) {
+        updateData.notes = setPrinterInNotes(order.notes, printer);
+      } else if (newStatus !== "printing") {
+        // Clear printer assignment when leaving printing status
+        updateData.notes = setPrinterInNotes(order.notes, null);
+      }
+    }
+    await supabase.from("orders").update(updateData).eq("id", id);
     fetchOrders();
   }
 
@@ -632,6 +716,33 @@ export default function App() {
                 <div className="card"><h3>Printing Now</h3><p style={{ fontSize: 36, margin: "8px 0 0", fontWeight: 900, color: "var(--status-printing)" }}>{orders.filter(o => o.status === "printing").length}</p></div>
                 <div className="card"><h3>Completed</h3><p style={{ fontSize: 36, margin: "8px 0 0", fontWeight: 900, color: "var(--status-done)" }}>{orders.filter(o => o.status === "done").length}</p></div>
               </div>
+              {/* Printer Status Dashboard */}
+              <div className="printer-dashboard card" style={{ marginBottom: 24 }}>
+                <h3 style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22, color: "var(--accent)" }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Printer Status
+                </h3>
+                <div className="printer-status-grid">
+                  {PRINTERS.map(printer => {
+                    const activeOrder = orders.find(o => o.status === "printing" && getPrinterFromNotes(o.notes) === printer);
+                    return (
+                      <div key={printer} className={`printer-status-card ${activeOrder ? 'working' : 'resting'}`}>
+                        <div className="printer-status-indicator">
+                          <div className={`printer-dot ${activeOrder ? 'active' : 'idle'}`} />
+                          <span className="printer-name">{printer}</span>
+                        </div>
+                        <div className="printer-status-label">{activeOrder ? '⚙️ Working' : '✅ Resting'}</div>
+                        {activeOrder && (
+                          <div className="printer-current-order">
+                            Printing: <strong>{activeOrder.ordername || "Untitled"}</strong> — {activeOrder.name}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                   <h3 style={{ margin: 0 }}>Order Queue</h3>
@@ -654,21 +765,36 @@ export default function App() {
                             {o.ordername || "Untitled"}
                             <span style={{ fontSize: 10, background: o.status === "done" ? "var(--status-done)" : o.status === "printing" ? "var(--status-printing)" : "var(--status-queued)", color: "#fff", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700 }}>{o.status.toUpperCase()}</span>
                             {o.tracking_code && <span style={{ fontSize: 12, color: "var(--accent)", fontWeight: 700, fontFamily: "monospace" }}>{o.tracking_code}</span>}
+                            {o.status === "printing" && getPrinterFromNotes(o.notes) && <span style={{ fontSize: 10, background: "rgba(0,122,255,0.1)", color: "var(--status-printing)", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700, border: "1px solid rgba(0,122,255,0.2)" }}>🖨️ {getPrinterFromNotes(o.notes)}</span>}
                           </div>
                           <div style={{ color: "var(--text-secondary)", marginTop: 6, fontSize: 13 }}>{o.name} &bull; {o.phone}{o.email ? ` &bull; ${o.email}` : ""}</div>
                           <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{o.material} ({o.color})</div>
-                          {o.notes && <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4, fontStyle: "italic" }}>Notes: {o.notes}</div>}
+                          {getCleanNotes(o.notes) && <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4, fontStyle: "italic" }}>Notes: {getCleanNotes(o.notes)}</div>}
                           <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 6 }}>
-                            {o.created_at && <span>{new Date(o.created_at).toLocaleString()} &bull; </span>}
+                            {o.createdat && <span>{new Date(o.createdat).toLocaleString()} &bull; </span>}
                             {o.filesize > 0 && <span>{(o.filesize / 1024).toFixed(0)} KB</span>}
                           </div>
                         </div>
                         <div className="admin-order-actions">
-                          <select value={o.status} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)} style={{ width: 130, padding: 10, fontSize: 13 }}>
+                          <select value={o.status} onChange={(e) => {
+                            const newStatus = e.target.value;
+                            if (newStatus === "printing") {
+                              const busyPrinters = orders.filter(x => x.status === "printing" && x.id !== o.id).map(x => getPrinterFromNotes(x.notes)).filter(Boolean);
+                              const available = PRINTERS.find(p => !busyPrinters.includes(p)) || PRINTERS[0];
+                              handleUpdateOrderStatus(o.id, newStatus, available);
+                            } else {
+                              handleUpdateOrderStatus(o.id, newStatus);
+                            }
+                          }} style={{ width: 130, padding: 10, fontSize: 13 }}>
                             <option value="queued">Queued</option>
                             <option value="printing">Printing</option>
                             <option value="done">Done</option>
                           </select>
+                          {o.status === "printing" && (
+                            <select value={getPrinterFromNotes(o.notes) || PRINTERS[0]} onChange={(e) => handleUpdateOrderStatus(o.id, "printing", e.target.value)} style={{ width: 150, padding: 10, fontSize: 13 }}>
+                              {PRINTERS.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                          )}
                           {o.fileurl && o.fileurl.split(',').map((url, idx, arr) => (
                             <a key={idx} href={url} download target="_blank" rel="noreferrer" className="btn btn-accent" style={{ padding: "8px 16px", fontSize: 12 }}>
                               Download {arr.length > 1 ? idx + 1 : ""}
@@ -706,6 +832,17 @@ export default function App() {
                 <div style={{ marginBottom: 20 }}><label>Hero Subtitle</label><textarea rows="3" value={config.hero_subtitle} onChange={e => setConfig(p => ({ ...p, hero_subtitle: e.target.value }))} /></div>
                 <div style={{ marginBottom: 20 }}><label>Why Us - Title</label><input value={config.why_title} onChange={e => setConfig(p => ({ ...p, why_title: e.target.value }))} /></div>
                 <div style={{ marginBottom: 32 }}><label>Why Us - Text</label><textarea rows="4" value={config.why_text} onChange={e => setConfig(p => ({ ...p, why_text: e.target.value }))} /></div>
+                <hr style={{ border: 0, borderTop: "1px solid var(--border-glass)", margin: "28px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <label style={{ margin: 0 }}>Social & Contact Info</label>
+                  <button type="button" className={`btn ${config.show_socials !== false ? "btn-accent" : "btn-glass"}`} style={{ padding: "8px 12px", gap: 6 }} onClick={() => setConfig(p => ({ ...p, show_socials: p.show_socials === false ? true : false }))}>
+                    {config.show_socials !== false ? <EyeIcon /> : <EyeSlashIcon />} {config.show_socials !== false ? "Visible" : "Hidden"}
+                  </button>
+                </div>
+                <div style={{ marginBottom: 20 }}><label>WhatsApp Number</label><input value={config.whatsapp_number || ""} onChange={e => setConfig(p => ({ ...p, whatsapp_number: e.target.value }))} placeholder="e.g. +201012345678" /></div>
+                <div style={{ marginBottom: 20 }}><label>Instagram Link</label><input value={config.instagram_link || ""} onChange={e => setConfig(p => ({ ...p, instagram_link: e.target.value }))} placeholder="https://instagram.com/..." /></div>
+                <div style={{ marginBottom: 28 }}><label>Email Address</label><input type="email" value={config.email_address || ""} onChange={e => setConfig(p => ({ ...p, email_address: e.target.value }))} placeholder="hello@example.com" /></div>
+                <div style={{ marginBottom: 32 }}><label>Privacy Policy</label><textarea rows="6" value={config.privacy_policy || ""} onChange={e => setConfig(p => ({ ...p, privacy_policy: e.target.value }))} placeholder="Enter your privacy policy text here..." /></div>
                 <button type="submit" className="btn btn-primary" disabled={savingCMS}>{savingCMS ? "Saving..." : "Save Configuration"}</button>
               </form>
             </div>
@@ -981,7 +1118,9 @@ export default function App() {
           </section>
         )}
 
-        {(hash !== "#full-gallery" && hash !== "#order" && hash !== "#track") && (
+        {!VALID_HASHES.includes(hash) && <NotFoundPage />}
+
+        {(VALID_HASHES.includes(hash) && hash !== "#full-gallery" && hash !== "#order" && hash !== "#track") && (
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
@@ -994,6 +1133,11 @@ export default function App() {
           <p>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <a href="#order" className="btn btn-accent">Place an Order</a>
+            {config.whatsapp_number && (
+              <a href={`https://wa.me/${config.whatsapp_number.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("Hello! I'd like to place an order.")}`} target="_blank" rel="noreferrer" className="btn btn-glass" style={{ gap: 8 }}>
+                <WhatsAppIcon /> Order via WhatsApp
+              </a>
+            )}
             <a href="#track" className="btn btn-glass">Track Order</a>
           </div>
         </section>
@@ -1064,14 +1208,29 @@ export default function App() {
         <section id="contact" className="section-container reveal">
           <h2>Get In Touch</h2>
           <p>Need a custom order or have questions? We're here to help.</p>
-          <div className="contact-buttons">
-            <a href="https://wa.me/" target="_blank" rel="noreferrer" className="btn btn-accent" style={{ gap: 10 }}>
-              <WhatsAppIcon /> WhatsApp
-            </a>
-            <a href="mailto:hello@justprint.com" className="btn btn-glass" style={{ gap: 10 }}>
-              <EmailIcon /> Email Us
-            </a>
-          </div>
+          {config.show_socials !== false && (
+            <div className="contact-buttons">
+              {config.whatsapp_number ? (
+                <a href={`https://wa.me/${config.whatsapp_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="btn btn-accent" style={{ gap: 10 }}>
+                  <WhatsAppIcon /> WhatsApp
+                </a>
+              ) : (
+                <a href="https://wa.me/" target="_blank" rel="noreferrer" className="btn btn-accent" style={{ gap: 10 }}>
+                  <WhatsAppIcon /> WhatsApp
+                </a>
+              )}
+              {config.email_address ? (
+                <a href={`mailto:${config.email_address}`} className="btn btn-glass" style={{ gap: 10 }}>
+                  <EmailIcon /> Email Us
+                </a>
+              ) : (
+                <a href="mailto:hello@justprint.com" className="btn btn-glass" style={{ gap: 10 }}>
+                  <EmailIcon /> Email Us
+                </a>
+              )}
+            </div>
+          )}
+          {config.show_socials === false && <p style={{ fontStyle: "italic", color: "var(--text-tertiary)" }}>Contact information is currently hidden.</p>}
         </section>
           </>
         )}
@@ -1090,18 +1249,49 @@ export default function App() {
             <a href="#track">Track Order</a>
             <a href="#full-gallery">Gallery</a>
             <a href="#about">About</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setPrivacyModalOpen(true); }}>Privacy Policy</a>
           </div>
           <div className="footer-col">
             <h4>Connect</h4>
-            <div className="social-links">
-              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="social-link"><InstagramIcon /></a>
-              <a href="https://wa.me/" target="_blank" rel="noreferrer" className="social-link"><WhatsAppIcon /></a>
-              <a href="mailto:hello@justprint.com" className="social-link"><EmailIcon /></a>
-            </div>
+            {config.show_socials !== false ? (
+              <div className="social-links">
+                {config.instagram_link && <a href={config.instagram_link} target="_blank" rel="noreferrer" className="social-link"><InstagramIcon /></a>}
+                {config.whatsapp_number && <a href={`https://wa.me/${config.whatsapp_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="social-link"><WhatsAppIcon /></a>}
+                {config.email_address && <a href={`mailto:${config.email_address}`} className="social-link"><EmailIcon /></a>}
+                {/* Fallbacks if none are provided */}
+                {!config.instagram_link && !config.whatsapp_number && !config.email_address && (
+                  <>
+                    <a href="https://instagram.com" target="_blank" rel="noreferrer" className="social-link"><InstagramIcon /></a>
+                    <a href="https://wa.me/" target="_blank" rel="noreferrer" className="social-link"><WhatsAppIcon /></a>
+                    <a href="mailto:hello@justprint.com" className="social-link"><EmailIcon /></a>
+                  </>
+                )}
+              </div>
+            ) : (
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>Hidden</span>
+            )}
           </div>
         </div>
         <div className="footer-bottom">&copy; {new Date().getFullYear()} {brandName}. All rights reserved.</div>
       </footer>
+
+      {/* Privacy Policy Modal */}
+      {privacyModalOpen && (
+        <div className="modal-backdrop" onClick={() => setPrivacyModalOpen(false)}>
+          <div className="modal-content card" onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h2 style={{ margin: 0 }}>Privacy Policy</h2>
+              <button onClick={() => setPrivacyModalOpen(false)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 24 }}>&times;</button>
+            </div>
+            <div style={{ maxHeight: "60vh", overflowY: "auto", fontSize: 14, lineHeight: 1.6, color: "var(--text-secondary)", paddingRight: 8, whiteSpace: "pre-wrap" }}>
+              {config.privacy_policy || "No privacy policy has been set yet."}
+            </div>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button className="btn btn-primary" onClick={() => setPrivacyModalOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
