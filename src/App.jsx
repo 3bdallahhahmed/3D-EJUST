@@ -1043,6 +1043,7 @@ export default function App() {
                         <div style={{ fontSize: 16, fontWeight: 900, color: "var(--accent)", marginLeft: "auto" }}>{calculatedPrice.toFixed(2)} EGP</div>
                       </div>
                     </div>
+                    </div>
                   );
                 })}
               </div>
@@ -1536,9 +1537,8 @@ export default function App() {
           )}
           {config.show_socials === false && <p style={{ fontStyle: "italic", color: "var(--text-tertiary)" }}>Contact information is currently hidden.</p>}
         </section>
+        </>
         )}
-
-        {/* Floating Mobile CTA */}
         {hash !== "#order" && hash !== "#boss" && (
           <a href="#order" className="floating-cta">
             Order Now
