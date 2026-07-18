@@ -201,6 +201,12 @@ function PrintScene() {
 // ═══════════════════════════════════════════════════════════
 // SVG ICONS
 // ═══════════════════════════════════════════════════════════
+const SunIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+);
+const MoonIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+);
 const EyeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
 );
@@ -368,24 +374,19 @@ const DEFAULT_CONFIG = {
   privacy_policy: ""
 };
 
-function FullGalleryView() {
-  const allItems = [
-    { title: "Custom Gears", desc: "PLA — Mechanical parts" },
-    { title: "Phone Stand", desc: "PETG — Functional design" },
-    { title: "Miniature Model", desc: "PLA — High detail" },
-    { title: "Drone Mount", desc: "Carbon Fiber — Lightweight" },
-    { title: "Enclosure", desc: "ABS — Heat resistant" },
-    { title: "Art Piece", desc: "TPU — Flexible material" },
-    { title: "Keycaps", desc: "Resin — Custom profile" },
-    { title: "Planter", desc: "PLA — Home decor" },
-    { title: "Robot Arm", desc: "PETG — Robotics" },
-    { title: "Cosplay Prop", desc: "PLA — Large scale" },
-    { title: "RC Car Chassis", desc: "Nylon — High impact" },
-    { title: "Laptop Stand", desc: "PETG — Ergonomic" },
-    { title: "Cable Organizers", desc: "TPU — Flexible" },
-    { title: "Vase", desc: "Silk PLA — Aesthetic" },
-    { title: "Board Game Insert", desc: "PLA — Organization" },
+function FullGalleryView({ items, onItemClick }) {
+  const fallbackItems = [
+    { id: 'p1', title: "Custom Gears", description: "PLA -- Mechanical parts" },
+    { id: 'p2', title: "Phone Stand", description: "PETG -- Functional design" },
+    { id: 'p3', title: "Miniature Model", description: "PLA -- High detail" },
+    { id: 'p4', title: "Drone Mount", description: "Carbon Fiber -- Lightweight" },
+    { id: 'p5', title: "Enclosure", description: "ABS -- Heat resistant" },
+    { id: 'p6', title: "Art Piece", description: "TPU -- Flexible material" },
+    { id: 'p7', title: "Keycaps", description: "Resin -- Custom profile" },
+    { id: 'p8', title: "Planter", description: "PLA -- Home decor" },
+    { id: 'p9', title: "Robot Arm", description: "PETG -- Robotics" },
   ];
+  const displayItems = items.length > 0 ? items : fallbackItems;
 
   return (
     <section className="gallery-section animate-in" style={{ paddingTop: 160, minHeight: "100vh", position: "relative", zIndex: 10 }}>
@@ -393,16 +394,16 @@ function FullGalleryView() {
         <h1>Full Gallery</h1>
         <p style={{ maxWidth: 500, margin: "0 auto" }}>Explore everything we've printed. From functional mechanical parts to beautiful art pieces.</p>
         <div style={{ marginTop: 24 }}>
-          <a href="#home" className="btn btn-glass">← Back to Home</a>
+          <a href="#home" className="btn btn-glass">Back to Home</a>
         </div>
       </div>
       <div className="gallery-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-        {allItems.map((item, i) => (
-          <div key={i} className="gallery-card">
-            <div className="gallery-card-img"><CubeIcon /></div>
+        {displayItems.map((item, i) => (
+          <div key={item.id || i} className="gallery-card" style={{ cursor: item.media_urls ? 'pointer' : 'default' }} onClick={() => { if (item.media_urls && onItemClick) onItemClick(item); }}>
+            <div className="gallery-card-img">{item.cover_url ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <CubeIcon />}</div>
             <div className="gallery-card-body">
               <h4>{item.title}</h4>
-              <p>{item.desc}</p>
+              <p>{item.description}</p>
             </div>
           </div>
         ))}
@@ -416,6 +417,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [queuedOrdersCount, setQueuedOrdersCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
   const [hash, setHash] = useState(window.location.hash);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -433,10 +435,40 @@ export default function App() {
   const [adminTab, setAdminTab] = useState("orders");
   const [savingCMS, setSavingCMS] = useState(false);
   const [sortBy, setSortBy] = useState("date");
+  const [adminSearch, setAdminSearch] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState([]);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [successModal, setSuccessModal] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [orderStep, setOrderStep] = useState(1);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  // Gallery state
+  const [galleryItems, setGalleryItems] = useState([]);
+  const [activeGalleryItem, setActiveGalleryItem] = useState(null);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [editingGalleryItem, setEditingGalleryItem] = useState(null);
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [newGalleryItem, setNewGalleryItem] = useState({ title: "", description: "" });
+  const [newGalleryFiles, setNewGalleryFiles] = useState([]);
+
+  const addToast = (msg, type = "info") => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, msg, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  };
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.setAttribute("data-theme", "dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("theme", "light");
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     if (config.materials && config.colors && !newOrder.material) {
@@ -462,9 +494,11 @@ export default function App() {
   useEffect(() => {
     fetchOrders();
     fetchConfig();
+    fetchGallery();
     const sub = supabase.channel('schema-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'site_config' }, fetchConfig)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gallery_items' }, fetchGallery)
       .subscribe();
     return () => supabase.removeChannel(sub);
   }, [isAdmin]);
@@ -499,13 +533,10 @@ export default function App() {
 
   // Handle cross-page hash scrolling
   useEffect(() => {
-    if (hash && hash !== "#full-gallery" && hash !== "#boss") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (hash && !["#full-gallery", "#boss", "#order", "#track", "#home", ""].includes(hash)) {
       const el = document.getElementById(hash.replace("#", ""));
-      if (el) {
-        setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 100);
-      }
-    } else if (hash === "#full-gallery" || hash === "#home" || hash === "") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 100);
     }
   }, [hash]);
 
@@ -526,6 +557,107 @@ export default function App() {
   }
 
 
+  async function fetchGallery() {
+    const { data } = await supabase.from("gallery_items").select("*").order("created_at", { ascending: false });
+    if (data) setGalleryItems(data);
+  }
+
+  async function handleAddGalleryItem() {
+    if (!newGalleryItem.title.trim()) { addToast("Title is required.", "error"); return; }
+    if (newGalleryFiles.length === 0) { addToast("Upload at least one image.", "error"); return; }
+    setGalleryUploading(true);
+    try {
+      const urls = [];
+      for (const file of newGalleryFiles) {
+        const ext = file.name.split('.').pop();
+        const path = `gallery_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from('gallery-media').upload(path, file);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('gallery-media').getPublicUrl(path);
+        urls.push(publicUrl);
+      }
+      const cover = urls[0];
+      const { error } = await supabase.from("gallery_items").insert({
+        title: newGalleryItem.title,
+        description: newGalleryItem.description,
+        media_urls: urls.join(','),
+        cover_url: cover
+      });
+      if (error) throw error;
+      setNewGalleryItem({ title: "", description: "" });
+      setNewGalleryFiles([]);
+      fetchGallery();
+      addToast("Gallery item added!", "success");
+    } catch (err) {
+      addToast("Failed to add gallery item: " + err.message, "error");
+    }
+    setGalleryUploading(false);
+  }
+
+  async function handleDeleteGalleryItem(item) {
+    setConfirmModal({
+      message: `Delete "${item.title}" from gallery?`,
+      onConfirm: async () => {
+        // Delete media files from storage
+        if (item.media_urls) {
+          const paths = item.media_urls.split(',').map(u => u.split('/').pop());
+          await supabase.storage.from('gallery-media').remove(paths);
+        }
+        await supabase.from("gallery_items").delete().eq("id", item.id);
+        fetchGallery();
+        setConfirmModal(null);
+        addToast("Gallery item deleted.", "success");
+      }
+    });
+  }
+
+  async function handleSaveGalleryItem() {
+    if (!editingGalleryItem) return;
+    await supabase.from("gallery_items").update({
+      title: editingGalleryItem.title,
+      description: editingGalleryItem.description,
+      media_urls: editingGalleryItem.media_urls,
+      cover_url: editingGalleryItem.cover_url
+    }).eq("id", editingGalleryItem.id);
+    fetchGallery();
+    setEditingGalleryItem(null);
+    addToast("Gallery item updated.", "success");
+  }
+
+  async function handleAddMediaToGalleryItem(files) {
+    if (!editingGalleryItem || !files.length) return;
+    setGalleryUploading(true);
+    try {
+      const existingUrls = editingGalleryItem.media_urls ? editingGalleryItem.media_urls.split(',').filter(Boolean) : [];
+      for (const file of files) {
+        const ext = file.name.split('.').pop();
+        const path = `gallery_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from('gallery-media').upload(path, file);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('gallery-media').getPublicUrl(path);
+        existingUrls.push(publicUrl);
+      }
+      const updatedItem = { ...editingGalleryItem, media_urls: existingUrls.join(',') };
+      if (!updatedItem.cover_url && existingUrls.length > 0) updatedItem.cover_url = existingUrls[0];
+      setEditingGalleryItem(updatedItem);
+      addToast(`Added ${files.length} file(s).`, "success");
+    } catch (err) {
+      addToast("Upload failed: " + err.message, "error");
+    }
+    setGalleryUploading(false);
+  }
+
+  async function handleRemoveMediaFromGalleryItem(urlToRemove) {
+    if (!editingGalleryItem) return;
+    const filename = urlToRemove.split('/').pop();
+    await supabase.storage.from('gallery-media').remove([filename]);
+    const urls = editingGalleryItem.media_urls.split(',').filter(u => u !== urlToRemove);
+    const updatedItem = { ...editingGalleryItem, media_urls: urls.join(',') };
+    if (editingGalleryItem.cover_url === urlToRemove) {
+      updatedItem.cover_url = urls[0] || '';
+    }
+    setEditingGalleryItem(updatedItem);
+  }
 
   async function handleAdminLogin() {
     setLoginError("");
@@ -533,69 +665,33 @@ export default function App() {
     if (error) setLoginError(error.message);
   }
 
-  async function handleAdminLogout() {
-    await supabase.auth.signOut();
-    window.location.hash = "";
-  }
-
-  async function handleUpdateOrderStatus(id, newStatus, printer) {
-    const updateData = { status: newStatus };
-    const order = orders.find(o => o.id === id);
-    if (order) {
-      if (newStatus === "printing" && printer) {
-        updateData.notes = setPrinterInNotes(order.notes, printer);
-      } else if (newStatus !== "printing") {
-        // Clear printer assignment when leaving printing status
-        updateData.notes = setPrinterInNotes(order.notes, null);
-      }
-    }
-    await supabase.from("orders").update(updateData).eq("id", id);
-    fetchOrders();
-  }
-
-  async function handleDeleteOrder(id) {
-    if (!window.confirm("Delete this order permanently?")) return;
-    await supabase.from("orders").delete().eq("id", id);
-    fetchOrders();
-  }
-
-  async function handleUpdateWeight(id, weightStr) {
-    const weight = parseFloat(weightStr) || 0;
-    const price = weight * (parseFloat(config.price_per_gram) || 0);
-    await supabase.from("orders").update({ weightgrams: weight, pricepergram: config.price_per_gram, totalprice: price }).eq("id", id);
-    fetchOrders();
-  }
-
-  function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
-  function isValidEgyptPhone(phone) { return /^01[0125]\d{8}$/.test(phone.replace(/[\s\-()]/g, "")); }
-
-  function getSortedOrders() {
-    const sorted = [...orders];
-    switch (sortBy) {
-      case "weight": return sorted.sort((a, b) => (b.weightgrams || 0) - (a.weightgrams || 0));
-      case "filesize": return sorted.sort((a, b) => (b.filesize || 0) - (a.filesize || 0));
-      default: return sorted.sort((a, b) => new Date(b.createdat || 0) - new Date(a.createdat || 0));
-    }
-  }
-
-  async function handleUpdateCMS(e) {
-    e.preventDefault();
-    setSavingCMS(true);
-    const { error } = await supabase.from("site_config").upsert({ ...config, id: 1 });
-    if (error) alert("Failed to save config.");
-    else alert("Configuration saved!");
-    setSavingCMS(false);
-  }
-
   function handleFileChange(e) {
     const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
     const invalid = files.filter(f => !f.name.toLowerCase().endsWith(".stl") && !f.name.toLowerCase().endsWith(".zip"));
     if (invalid.length > 0) { setFileError("Only .stl or .zip files accepted."); return; }
     setFileError("");
     setSelectedFiles(files);
     setNewOrder(p => ({ ...p, fileName: files.map(f => f.name).join(", ") }));
   }
+
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = (e) => { e.preventDefault(); setIsDragging(false); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileChange({ target: { files: e.dataTransfer.files } });
+    }
+  };
+
+  const handlePhoneChange = (e) => {
+    let val = e.target.value.replace(/\D/g, "");
+    if (val.length > 11) val = val.slice(0, 11);
+    let formatted = val;
+    if (val.length > 3 && val.length <= 7) formatted = `${val.slice(0, 3)} ${val.slice(3)}`;
+    else if (val.length > 7) formatted = `${val.slice(0, 3)} ${val.slice(3, 7)} ${val.slice(7)}`;
+    setNewOrder(p => ({ ...p, phone: formatted }));
+  };
 
   async function handleOrderSubmit() {
     const errors = {};
@@ -660,9 +756,112 @@ export default function App() {
       fetchOrders();
     } catch (err) {
       console.error(err);
-      alert("Failed to submit order:\n" + (err.message || err));
+      addToast("Failed to submit order:\n" + (err.message || err), "error");
     }
     setIsUploading(false);
+  }
+
+  async function handleAdminLogout() {
+    await supabase.auth.signOut();
+    window.location.hash = "";
+  }
+
+  async function handleUpdateOrderStatus(id, newStatus, printer) {
+    const updateData = { status: newStatus };
+    const order = orders.find(o => o.id === id);
+    if (order) {
+      if (newStatus === "printing" && printer) {
+        updateData.notes = setPrinterInNotes(order.notes, printer);
+      } else if (newStatus !== "printing") {
+        // Clear printer assignment when leaving printing status
+        updateData.notes = setPrinterInNotes(order.notes, null);
+      }
+    }
+    await supabase.from("orders").update(updateData).eq("id", id);
+    fetchOrders();
+  }
+
+  async function handleDeleteOrder(id) {
+    setConfirmModal({
+      message: "Delete this order permanently?",
+      onConfirm: async () => {
+        await supabase.from("orders").delete().eq("id", id);
+        addToast("Order deleted", "success");
+        setConfirmModal(null);
+        fetchOrders();
+      }
+    });
+  }
+
+  async function handleUpdateWeight(id, weightStr) {
+    const weight = parseFloat(weightStr) || 0;
+    const price = weight * (parseFloat(config.price_per_gram) || 0);
+    await supabase.from("orders").update({ weightgrams: weight, pricepergram: config.price_per_gram, totalprice: price }).eq("id", id);
+    fetchOrders();
+  }
+
+  function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+  function isValidEgyptPhone(phone) { return /^01[0125]\d{8}$/.test(phone.replace(/[\s\-()]/g, "")); }
+
+  function exportCSV() {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "ID,Name,Email,Phone,Order Name,Status,Material,Color,Weight,Total Price,Tracking Code,Created At\n"
+      + getSortedOrders().map(o => {
+          return `"${o.id}","${o.name || ''}","${o.email || ''}","${o.phone || ''}","${o.ordername || ''}","${o.status}","${o.material || ''}","${o.color || ''}",${o.weightgrams || 0},${(o.weightgrams || 0) * (config.price_per_gram || 0)},"${o.tracking_code || ''}","${o.createdat}"`;
+        }).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `orders_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function getSortedOrders() {
+    let result = [...orders];
+    if (adminSearch.trim()) {
+      const q = adminSearch.toLowerCase();
+      result = result.filter(o => 
+        (o.name && o.name.toLowerCase().includes(q)) || 
+        (o.phone && o.phone.includes(q)) || 
+        (o.tracking_code && o.tracking_code.toLowerCase().includes(q))
+      );
+    }
+    switch (sortBy) {
+      case "weight": return result.sort((a, b) => (b.weightgrams || 0) - (a.weightgrams || 0));
+      case "filesize": return result.sort((a, b) => (b.filesize || 0) - (a.filesize || 0));
+      default: return result.sort((a, b) => new Date(b.createdat || 0) - new Date(a.createdat || 0));
+    }
+  }
+
+  async function handleBulkStatus(newStatus) {
+    await supabase.from("orders").update({ status: newStatus }).in("id", selectedOrders);
+    fetchOrders();
+    setSelectedOrders([]);
+    addToast(`Updated ${selectedOrders.length} orders`, "success");
+  }
+  
+  async function handleBulkDelete() {
+    setConfirmModal({
+      message: `Delete ${selectedOrders.length} orders permanently?`,
+      onConfirm: async () => {
+        await supabase.from("orders").delete().in("id", selectedOrders);
+        fetchOrders();
+        setSelectedOrders([]);
+        setConfirmModal(null);
+        addToast("Orders deleted", "success");
+      }
+    });
+  }
+
+  async function handleUpdateCMS(e) {
+    e.preventDefault();
+    setSavingCMS(true);
+    const { error } = await supabase.from("site_config").upsert({ ...config, id: 1 });
+    if (error) addToast("Failed to save config.", "error");
+    else addToast("Configuration saved!", "success");
+    setSavingCMS(false);
   }
 
   async function handleTrackSearch() {
@@ -699,13 +898,15 @@ export default function App() {
       <div className="admin-container">
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/><div className="bg-orb bg-orb-3"/></div>
         <div style={{ position: "relative", zIndex: 10 }}>
-          <div className="admin-header">
-            <h1 style={{ fontSize: 36, margin: 0 }}>Command Center</h1>
+          <div className="admin-header" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <h1 style={{ fontSize: 36, margin: 0, flex: 1 }}>Command Center</h1>
+            <button className="btn btn-glass" onClick={exportCSV}>Export CSV</button>
             <button className="btn btn-glass" onClick={handleAdminLogout}>Sign Out</button>
           </div>
 
           <div className="admin-tabs">
             <button className={`btn ${adminTab === "orders" ? "btn-primary" : "btn-glass"}`} onClick={() => setAdminTab("orders")}>Manage Orders</button>
+            <button className={`btn ${adminTab === "gallery" ? "btn-primary" : "btn-glass"}`} onClick={() => setAdminTab("gallery")}>Gallery</button>
             <button className={`btn ${adminTab === "cms" ? "btn-primary" : "btn-glass"}`} onClick={() => setAdminTab("cms")}>Edit Website</button>
           </div>
 
@@ -746,21 +947,50 @@ export default function App() {
               <div className="card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                   <h3 style={{ margin: 0 }}>Order Queue</h3>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Sort:</span>
-                    {["date", "weight", "filesize"].map(s => (
-                      <button key={s} className={`btn ${sortBy === s ? "btn-primary" : "btn-glass"}`}
-                        style={{ padding: "6px 14px", fontSize: 12 }}
-                        onClick={() => setSortBy(s)}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>
-                    ))}
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+                    <input 
+                      placeholder="Search name, phone, code..." 
+                      value={adminSearch} 
+                      onChange={e => setAdminSearch(e.target.value)} 
+                      style={{ padding: "6px 14px", fontSize: 13, minWidth: 200, borderRadius: "var(--radius-full)" }} 
+                    />
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Sort:</span>
+                      {["date", "weight", "filesize"].map(s => (
+                        <button key={s} className={`btn ${sortBy === s ? "btn-primary" : "btn-glass"}`}
+                          style={{ padding: "6px 14px", fontSize: 12 }}
+                          onClick={() => setSortBy(s)}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
+
+                {selectedOrders.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, padding: "12px 16px", background: "rgba(255,128,0,0.1)", borderRadius: "var(--radius-sm)", alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{selectedOrders.length} selected:</span>
+                    <button className="btn btn-sm btn-glass" onClick={() => handleBulkStatus("queued")}>Queued</button>
+                    <button className="btn btn-sm btn-glass" onClick={() => handleBulkStatus("printing")}>Printing</button>
+                    <button className="btn btn-sm btn-glass" onClick={() => handleBulkStatus("done")}>Done</button>
+                    <button className="btn btn-sm" style={{ background: "#FF3B30", color: "#fff" }} onClick={handleBulkDelete}>Delete</button>
+                  </div>
+                )}
                 {getSortedOrders().map(o => {
                   const calculatedPrice = (o.weightgrams || 0) * (parseFloat(config.price_per_gram) || 0);
+                  const isSelected = selectedOrders.includes(o.id);
                   return (
-                    <div key={o.id} className="admin-order-card">
-                      <div className="admin-order-layout">
-                        <div className="admin-order-info">
+                    <div key={o.id} className="admin-order-card" style={{ display: 'flex', gap: 12 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={isSelected} 
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedOrders(prev => [...prev, o.id]);
+                          else setSelectedOrders(prev => prev.filter(id => id !== o.id));
+                        }}
+                        style={{ width: 20, height: 20, marginTop: 16 }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div className="admin-order-layout">
+                          <div className="admin-order-info">
                           <div style={{ fontSize: 17, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                             {o.ordername || "Untitled"}
                             <span style={{ fontSize: 10, background: o.status === "done" ? "var(--status-done)" : o.status === "printing" ? "var(--status-printing)" : "var(--status-queued)", color: "#fff", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700 }}>{o.status.toUpperCase()}</span>
@@ -800,6 +1030,7 @@ export default function App() {
                               Download {arr.length > 1 ? idx + 1 : ""}
                             </a>
                           ))}
+                          <button onClick={() => setEditingOrder(o)} className="btn btn-glass" style={{ padding: "8px 16px", fontSize: 12 }}>Edit</button>
                           <button onClick={() => handleDeleteOrder(o.id)} style={{ padding: "8px 16px", background: "#FF3B30", color: "#fff", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Delete</button>
                         </div>
                       </div>
@@ -818,6 +1049,52 @@ export default function App() {
             </>
           )}
 
+          {adminTab === "gallery" && (
+            <>
+              {/* Add New Gallery Item */}
+              <div className="card" style={{ marginBottom: 24 }}>
+                <h3 style={{ marginBottom: 16 }}>Add New Gallery Product</h3>
+                <div className="form-row">
+                  <div style={{ flex: 1 }}><label>Title *</label><input value={newGalleryItem.title} onChange={e => setNewGalleryItem(p => ({...p, title: e.target.value}))} placeholder="Product title" style={{ marginBottom: 12 }} /></div>
+                </div>
+                <div style={{ marginBottom: 12 }}><label>Description</label><textarea rows="2" value={newGalleryItem.description} onChange={e => setNewGalleryItem(p => ({...p, description: e.target.value}))} placeholder="Brief description..." /></div>
+                <div style={{ marginBottom: 16 }}>
+                  <label>Images / GIFs *</label>
+                  <input type="file" multiple accept="image/*,.gif" onChange={e => setNewGalleryFiles(Array.from(e.target.files))} style={{ padding: 14, border: "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.05)" }} />
+                  {newGalleryFiles.length > 0 && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>{newGalleryFiles.length} file(s) selected</div>}
+                </div>
+                <button className="btn btn-primary" onClick={handleAddGalleryItem} disabled={galleryUploading}>{galleryUploading ? "Uploading..." : "Add to Gallery"}</button>
+              </div>
+
+              {/* Existing Gallery Items */}
+              <div className="card">
+                <h3 style={{ marginBottom: 16 }}>Gallery Items ({galleryItems.length})</h3>
+                {galleryItems.length === 0 && <p style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>No gallery items yet. Add one above.</p>}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                  {galleryItems.map(item => {
+                    const mediaUrls = item.media_urls ? item.media_urls.split(',').filter(Boolean) : [];
+                    return (
+                      <div key={item.id} className="admin-gallery-card">
+                        <div className="admin-gallery-cover">
+                          {item.cover_url ? <img src={item.cover_url} alt={item.title} /> : <CubeIcon />}
+                          <div className="admin-gallery-media-count">{mediaUrls.length} media</div>
+                        </div>
+                        <div style={{ padding: '12px 16px' }}>
+                          <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700 }}>{item.title}</h4>
+                          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>{item.description || 'No description'}</p>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                            <button className="btn btn-glass" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setEditingGalleryItem({...item})}>Edit</button>
+                            <button style={{ padding: '6px 12px', fontSize: 12, background: '#FF3B30', color: '#fff', border: 'none', borderRadius: 'var(--radius-full)', fontWeight: 700, cursor: 'pointer' }} onClick={() => handleDeleteGalleryItem(item)}>Delete</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
           {adminTab === "cms" && (
             <div className="card" style={{ maxWidth: 800 }}>
               <h3 style={{ marginBottom: 8 }}>Content Management</h3>
@@ -825,6 +1102,12 @@ export default function App() {
               <form onSubmit={handleUpdateCMS}>
                 <div style={{ marginBottom: 20 }}><label>Brand Name</label><input value={config.brand_name || ""} onChange={e => setConfig(p => ({ ...p, brand_name: e.target.value }))} /></div>
                 <div style={{ marginBottom: 20 }}><label>Price per Gram (EGP)</label><input type="number" value={config.price_per_gram} onChange={e => setConfig(p => ({ ...p, price_per_gram: e.target.value }))} /></div>
+                <div style={{ marginBottom: 20 }}><label>Announcement Text</label><input value={config.announcement_text || ""} onChange={e => setConfig(p => ({ ...p, announcement_text: e.target.value }))} placeholder="Site wide announcement..." /></div>
+                <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <label style={{ margin: 0 }}>Show Announcement</label>
+                  <input type="checkbox" checked={config.announcement_active || false} onChange={e => setConfig(p => ({ ...p, announcement_active: e.target.checked }))} style={{ width: 24, height: 24 }} />
+                </div>
+                <hr style={{ border: 0, borderTop: "1px solid var(--border-glass)", margin: "28px 0" }} />
                 <div style={{ marginBottom: 20 }}><label>Materials (comma separated)</label><input value={config.materials} onChange={e => setConfig(p => ({ ...p, materials: e.target.value }))} /></div>
                 <div style={{ marginBottom: 28 }}><label>Colors (comma separated)</label><input value={config.colors} onChange={e => setConfig(p => ({ ...p, colors: e.target.value }))} /></div>
                 <hr style={{ border: 0, borderTop: "1px solid var(--border-glass)", margin: "28px 0" }} />
@@ -890,13 +1173,16 @@ export default function App() {
 
       {/* Navigation */}
       <nav className="header">
-        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {brandName}</a>
+        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
         <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
           <span className={`hamburger ${mobileMenuOpen ? "open" : ""}`}>
             <span /><span /><span />
           </span>
         </button>
         <div className={`nav-links ${mobileMenuOpen ? "nav-open" : ""}`}>
+          <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
+            {darkMode ? <SunIcon /> : <MoonIcon />}
+          </button>
           <a href="#why" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
           <a href="#full-gallery" onClick={() => setMobileMenuOpen(false)}>Gallery</a>
           <a href="#order" onClick={() => setMobileMenuOpen(false)}>Order</a>
@@ -905,8 +1191,14 @@ export default function App() {
         </div>
       </nav>
 
+      {config.announcement_active && config.announcement_text && hash !== "#boss" && (
+        <div style={{ background: "var(--accent-gradient)", color: "#fff", textAlign: "center", padding: "12px 24px", fontSize: 14, fontWeight: 600, marginTop: 80, marginInline: 24, borderRadius: "var(--radius-full)", position: "relative", zIndex: 50, boxShadow: "var(--accent-glow)" }}>
+          {config.announcement_text}
+        </div>
+      )}
+
       <main>
-        {hash === "#full-gallery" && <FullGalleryView />}
+        {hash === "#full-gallery" && <FullGalleryView items={galleryItems} onItemClick={(item) => { setActiveGalleryItem(item); setActiveMediaIndex(0); }} />}
         
         {hash === "#order" && (
           <section className="section-container animate-in" style={{ paddingTop: 140, minHeight: "100vh", position: "relative", zIndex: 10 }}>
@@ -953,7 +1245,7 @@ export default function App() {
                   <div className="form-row">
                     <div>
                       <label>Phone (Egypt) *</label>
-                      <input value={newOrder.phone} onChange={e => setNewOrder(p => ({ ...p, phone: e.target.value }))} placeholder="01012345678" style={formErrors.phone ? { borderColor: '#FF3B30' } : {}} />
+                      <input value={newOrder.phone} onChange={handlePhoneChange} placeholder="010 1234 5678" style={formErrors.phone ? { borderColor: '#FF3B30' } : {}} />
                       {formErrors.phone && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{formErrors.phone}</div>}
                     </div>
                   </div>
@@ -995,12 +1287,24 @@ export default function App() {
                     </div>
                   </div>
                   <div style={{ marginBottom: 20 }}>
-                    <label>Notes / Special Instructions</label>
-                    <textarea value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Infill %, orientation, special requests..." rows="3" />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label>Notes / Special Instructions</label>
+                      <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600 }}>{newOrder.notes.length}/500</span>
+                    </div>
+                    <textarea value={newOrder.notes} maxLength={500} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Infill %, orientation, special requests..." rows="3" />
                   </div>
                   <div style={{ marginBottom: 24 }}>
                     <label>STL or ZIP File(s) *</label>
-                    <input type="file" multiple accept=".stl,.zip" onChange={handleFileChange} style={{ padding: "14px", border: formErrors.file ? "2px dashed #FF3B30" : "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.3)" }} />
+                    <div className={`drop-zone ${isDragging ? 'active' : ''}`} 
+                         onDragOver={handleDragOver} 
+                         onDragLeave={handleDragLeave} 
+                         onDrop={handleDrop}
+                         style={{ padding: "40px", border: formErrors.file ? "2px dashed #FF3B30" : "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.05)", textAlign: "center", cursor: "pointer" }}>
+                      <input type="file" multiple accept=".stl,.zip" onChange={handleFileChange} style={{ display: 'none' }} id="fileInput" />
+                      <label htmlFor="fileInput" style={{ cursor: 'pointer', display: 'block' }}>
+                        {selectedFiles.length > 0 ? selectedFiles.map(f => f.name).join(", ") : "Drag & Drop or Click to Upload"}
+                      </label>
+                    </div>
                     {fileError && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{fileError}</div>}
                     {formErrors.file && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{formErrors.file}</div>}
                   </div>
@@ -1165,7 +1469,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* ── GALLERY ── */}
+        {/* -- GALLERY -- */}
         <section id="gallery" className="gallery-section reveal">
           <FloatingIcons icons={[
             { src: '22.png', size: 110, top: '20%', left: '-12%', delay: '1s', duration: '6s' },
@@ -1176,25 +1480,25 @@ export default function App() {
             <p style={{ maxWidth: 500, margin: "0 auto" }}>Some of the parts we've printed. Your project could be next.</p>
           </div>
           <div className="gallery-grid">
-            {[
-              { title: "Custom Gears", desc: "PLA — Mechanical parts" },
-              { title: "Phone Stand", desc: "PETG — Functional design" },
-              { title: "Miniature Model", desc: "PLA — High detail" },
-              { title: "Drone Mount", desc: "Carbon Fiber — Lightweight" },
-              { title: "Enclosure", desc: "ABS — Heat resistant" },
-              { title: "Art Piece", desc: "TPU — Flexible material" }
-            ].map((item, i) => (
-              <div key={i} className="gallery-card">
-                <div className="gallery-card-img"><CubeIcon /></div>
+            {(galleryItems.length > 0 ? galleryItems.slice(0, 6) : [
+              { id: 'p1', title: "Custom Gears", description: "PLA -- Mechanical parts" },
+              { id: 'p2', title: "Phone Stand", description: "PETG -- Functional design" },
+              { id: 'p3', title: "Miniature Model", description: "PLA -- High detail" },
+              { id: 'p4', title: "Drone Mount", description: "Carbon Fiber -- Lightweight" },
+              { id: 'p5', title: "Enclosure", description: "ABS -- Heat resistant" },
+              { id: 'p6', title: "Art Piece", description: "TPU -- Flexible material" }
+            ]).map((item, i) => (
+              <div key={item.id || i} className="gallery-card" style={{ cursor: item.media_urls ? 'pointer' : 'default' }} onClick={() => { if (item.media_urls) { setActiveGalleryItem(item); setActiveMediaIndex(0); } }}>
+                <div className="gallery-card-img">{item.cover_url ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <CubeIcon />}</div>
                 <div className="gallery-card-body">
                   <h4>{item.title}</h4>
-                  <p>{item.desc}</p>
+                  <p>{item.description}</p>
                 </div>
               </div>
             ))}
           </div>
           <div style={{ textAlign: "center", marginTop: 48 }}>
-            <a href="#full-gallery" className="btn btn-glass">Load More</a>
+            <a href="#full-gallery" className="btn btn-glass">View Full Gallery</a>
           </div>
         </section>
 
@@ -1232,11 +1536,171 @@ export default function App() {
           )}
           {config.show_socials === false && <p style={{ fontStyle: "italic", color: "var(--text-tertiary)" }}>Contact information is currently hidden.</p>}
         </section>
-          </>
+        )}
+
+        {/* Floating Mobile CTA */}
+        {hash !== "#order" && hash !== "#boss" && (
+          <a href="#order" className="floating-cta">
+            Order Now
+          </a>
         )}
       </main>
 
-      {/* ── FOOTER ── */}
+      {/* Toasts */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast ${t.type}`}>
+            {t.msg}
+            <button className="toast-close" onClick={() => setToasts(p => p.filter(x => x.id !== t.id))}>×</button>
+          </div>
+        ))}
+      </div>
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="modal-content" style={{ padding: 32, textAlign: 'center' }}>
+            <h3 style={{ marginBottom: 16 }}>{confirmModal.message}</h3>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button className="btn btn-glass" onClick={() => setConfirmModal(null)}>Cancel</button>
+              <button className="btn btn-danger" style={{ background: '#FF3B30', color: 'white' }} onClick={confirmModal.onConfirm}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Order Modal */}
+      {editingOrder && (
+        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div className="modal-content" style={{ padding: 32, width: '90%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginBottom: 24 }}>Edit Order: {editingOrder.ordername || "Untitled"}</h2>
+            
+            <div className="form-row">
+              <div style={{ flex: 1 }}><label>Name</label><input value={editingOrder.name || ""} onChange={e => setEditingOrder({...editingOrder, name: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+              <div style={{ flex: 1 }}><label>Phone</label><input value={editingOrder.phone || ""} onChange={e => setEditingOrder({...editingOrder, phone: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+            </div>
+            <div><label>Email</label><input value={editingOrder.email || ""} onChange={e => setEditingOrder({...editingOrder, email: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+            <div className="form-row">
+              <div style={{ flex: 1 }}><label>Material</label><input value={editingOrder.material || ""} onChange={e => setEditingOrder({...editingOrder, material: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+              <div style={{ flex: 1 }}><label>Color</label><input value={editingOrder.color || ""} onChange={e => setEditingOrder({...editingOrder, color: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+            </div>
+            <div>
+              <label>Notes</label>
+              <textarea rows="3" value={getCleanNotes(editingOrder.notes)} onChange={e => setEditingOrder({...editingOrder, notes: setPrinterInNotes(e.target.value, getPrinterFromNotes(editingOrder.notes))})} style={{ width: '100%', marginBottom: 16 }} />
+            </div>
+            
+            <div>
+              <label>Files</label>
+              {editingOrder.fileurl ? editingOrder.fileurl.split(',').map((url, idx) => {
+                const parts = url.split('/');
+                const filename = parts[parts.length - 1];
+                return (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, wordBreak: 'break-all' }}>{filename}</span>
+                    <button className="btn btn-sm" style={{ background: '#FF3B30', color: 'white', padding: "4px 8px", border: "none", borderRadius: "var(--radius-full)", cursor: "pointer" }} onClick={async () => {
+                       if(!window.confirm("Permanently delete this file?")) return;
+                       const newUrls = editingOrder.fileurl.split(',').filter((_, i) => i !== idx);
+                       await supabase.storage.from('stl-files').remove([filename]);
+                       setEditingOrder({ ...editingOrder, fileurl: newUrls.join(',') });
+                    }}>Delete</button>
+                  </div>
+                );
+              }) : <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>No files attached.</div>}
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', marginTop: 32 }}>
+              <button className="btn btn-glass" onClick={() => setEditingOrder(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={async () => {
+                await supabase.from("orders").update(editingOrder).eq("id", editingOrder.id);
+                fetchOrders();
+                setEditingOrder(null);
+                addToast("Order updated", "success");
+              }}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gallery Product Detail Modal */}
+      {activeGalleryItem && (() => {
+        const mediaUrls = activeGalleryItem.media_urls ? activeGalleryItem.media_urls.split(',').filter(Boolean) : [];
+        return (
+          <div className="modal-overlay gallery-modal-overlay" onClick={() => setActiveGalleryItem(null)}>
+            <div className="gallery-modal" onClick={e => e.stopPropagation()}>
+              <button className="gallery-modal-close" onClick={() => setActiveGalleryItem(null)}>&times;</button>
+              <div className="gallery-modal-main">
+                {mediaUrls.length > 0 && (
+                  <div className="gallery-modal-viewer">
+                    {mediaUrls[activeMediaIndex].match(/\.gif$/i) 
+                      ? <img src={mediaUrls[activeMediaIndex]} alt={activeGalleryItem.title} className="gallery-modal-media" />
+                      : <img src={mediaUrls[activeMediaIndex]} alt={activeGalleryItem.title} className="gallery-modal-media" />
+                    }
+                    {mediaUrls.length > 1 && (
+                      <>
+                        <button className="gallery-nav gallery-nav-prev" onClick={() => setActiveMediaIndex(i => (i - 1 + mediaUrls.length) % mediaUrls.length)}>&lsaquo;</button>
+                        <button className="gallery-nav gallery-nav-next" onClick={() => setActiveMediaIndex(i => (i + 1) % mediaUrls.length)}>&rsaquo;</button>
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className="gallery-modal-info">
+                  <h2>{activeGalleryItem.title}</h2>
+                  <p>{activeGalleryItem.description}</p>
+                  {mediaUrls.length > 1 && (
+                    <div className="gallery-thumbs">
+                      {mediaUrls.map((url, idx) => (
+                        <div key={idx} className={`gallery-thumb ${idx === activeMediaIndex ? 'active' : ''}`} onClick={() => setActiveMediaIndex(idx)}>
+                          <img src={url} alt={`${activeGalleryItem.title} ${idx + 1}`} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 16 }}>
+                    {activeMediaIndex + 1} / {mediaUrls.length}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Edit Gallery Item Modal */}
+      {editingGalleryItem && (
+        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div className="modal-content" style={{ padding: 32, width: '90%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginBottom: 24 }}>Edit Gallery Item</h2>
+            <div style={{ marginBottom: 16 }}><label>Title</label><input value={editingGalleryItem.title} onChange={e => setEditingGalleryItem({...editingGalleryItem, title: e.target.value})} /></div>
+            <div style={{ marginBottom: 16 }}><label>Description</label><textarea rows="3" value={editingGalleryItem.description || ""} onChange={e => setEditingGalleryItem({...editingGalleryItem, description: e.target.value})} /></div>
+            
+            <label>Media Files</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 12, marginBottom: 16 }}>
+              {editingGalleryItem.media_urls && editingGalleryItem.media_urls.split(',').filter(Boolean).map((url, idx) => (
+                <div key={idx} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: editingGalleryItem.cover_url === url ? '3px solid var(--accent)' : '1px solid var(--border-glass)' }}>
+                  <img src={url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
+                  <div style={{ display: 'flex', gap: 4, padding: 4 }}>
+                    <button style={{ flex: 1, fontSize: 10, padding: '4px', cursor: 'pointer', background: editingGalleryItem.cover_url === url ? 'var(--accent)' : 'rgba(255,255,255,0.1)', color: editingGalleryItem.cover_url === url ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: 4 }} onClick={() => setEditingGalleryItem({...editingGalleryItem, cover_url: url})}>Cover</button>
+                    <button style={{ fontSize: 10, padding: '4px 6px', cursor: 'pointer', background: '#FF3B30', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => handleRemoveMediaFromGalleryItem(url)}>X</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label>Add More Images / GIFs</label>
+              <input type="file" multiple accept="image/*,.gif" onChange={e => handleAddMediaToGalleryItem(Array.from(e.target.files))} style={{ padding: 14, border: "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.05)" }} />
+              {galleryUploading && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 6 }}>Uploading...</div>}
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
+              <button className="btn btn-glass" onClick={() => setEditingGalleryItem(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSaveGalleryItem}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* -- FOOTER -- */}
       <footer className="site-footer">
         <div className="footer-grid">
           <div>
