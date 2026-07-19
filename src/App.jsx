@@ -1231,6 +1231,104 @@ export default function App() {
               </form>
             </div>
           )}
+
+          {/* Admin Modals */}
+          {confirmModal && (
+            <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+              <div className="modal-content" style={{ padding: 32, textAlign: 'center' }}>
+                <h3 style={{ marginBottom: 16 }}>{confirmModal.message}</h3>
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+                  <button className="btn btn-glass" onClick={() => setConfirmModal(null)}>Cancel</button>
+                  <button className="btn btn-danger" style={{ background: '#FF3B30', color: 'white' }} onClick={confirmModal.onConfirm}>Confirm</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {editingOrder && (
+            <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+              <div className="modal-content" style={{ padding: 32, width: '90%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
+                <h2 style={{ marginBottom: 24 }}>Edit Order: {editingOrder.ordername || "Untitled"}</h2>
+                
+                <div className="form-row">
+                  <div style={{ flex: 1 }}><label>Name</label><input value={editingOrder.name || ""} onChange={e => setEditingOrder({...editingOrder, name: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+                  <div style={{ flex: 1 }}><label>Phone</label><input value={editingOrder.phone || ""} onChange={e => setEditingOrder({...editingOrder, phone: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+                </div>
+                <div><label>Email</label><input value={editingOrder.email || ""} onChange={e => setEditingOrder({...editingOrder, email: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+                <div className="form-row">
+                  <div style={{ flex: 1 }}><label>Material</label><input value={editingOrder.material || ""} onChange={e => setEditingOrder({...editingOrder, material: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+                  <div style={{ flex: 1 }}><label>Color</label><input value={editingOrder.color || ""} onChange={e => setEditingOrder({...editingOrder, color: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
+                </div>
+                <div>
+                  <label>Notes</label>
+                  <textarea rows="3" value={getCleanNotes(editingOrder.notes)} onChange={e => setEditingOrder({...editingOrder, notes: setPrinterInNotes(e.target.value, getPrinterFromNotes(editingOrder.notes))})} style={{ width: '100%', marginBottom: 16 }} />
+                </div>
+                
+                <div>
+                  <label>Files</label>
+                  {editingOrder.fileurl ? editingOrder.fileurl.split(',').map((url, idx) => {
+                    const parts = url.split('/');
+                    const filename = parts[parts.length - 1];
+                    return (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 13, wordBreak: 'break-all' }}>{filename}</span>
+                        <button className="btn btn-sm" style={{ background: '#FF3B30', color: 'white', padding: "4px 8px", border: "none", borderRadius: "var(--radius-full)", cursor: "pointer" }} onClick={async () => {
+                           if(!window.confirm("Permanently delete this file?")) return;
+                           const newUrls = editingOrder.fileurl.split(',').filter((_, i) => i !== idx);
+                           await supabase.storage.from('stl-files').remove([filename]);
+                           setEditingOrder({ ...editingOrder, fileurl: newUrls.join(',') });
+                        }}>Delete</button>
+                      </div>
+                    );
+                  }) : <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>No files attached.</div>}
+                </div>
+
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', marginTop: 32 }}>
+                  <button className="btn btn-glass" onClick={() => setEditingOrder(null)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={async () => {
+                    await supabase.from("orders").update(editingOrder).eq("id", editingOrder.id);
+                    fetchOrders();
+                    setEditingOrder(null);
+                    addToast("Order updated", "success");
+                  }}>Save Changes</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {editingGalleryItem && (
+            <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+              <div className="modal-content" style={{ padding: 32, width: '90%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto' }}>
+                <h2 style={{ marginBottom: 24 }}>Edit Gallery Item</h2>
+                <div style={{ marginBottom: 16 }}><label>Title</label><input value={editingGalleryItem.title} onChange={e => setEditingGalleryItem({...editingGalleryItem, title: e.target.value})} /></div>
+                <div style={{ marginBottom: 16 }}><label>Description</label><textarea rows="3" value={editingGalleryItem.description || ""} onChange={e => setEditingGalleryItem({...editingGalleryItem, description: e.target.value})} /></div>
+                
+                <label>Media Files</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 12, marginBottom: 16 }}>
+                  {editingGalleryItem.media_urls && editingGalleryItem.media_urls.split(',').filter(Boolean).map((url, idx) => (
+                    <div key={idx} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: editingGalleryItem.cover_url === url ? '3px solid var(--accent)' : '1px solid var(--border-glass)' }}>
+                      <img src={url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
+                      <div style={{ display: 'flex', gap: 4, padding: 4 }}>
+                        <button style={{ flex: 1, fontSize: 10, padding: '4px', cursor: 'pointer', background: editingGalleryItem.cover_url === url ? 'var(--accent)' : 'rgba(255,255,255,0.1)', color: editingGalleryItem.cover_url === url ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: 4 }} onClick={() => setEditingGalleryItem({...editingGalleryItem, cover_url: url})}>Cover</button>
+                        <button style={{ fontSize: 10, padding: '4px 6px', cursor: 'pointer', background: '#FF3B30', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => handleRemoveMediaFromGalleryItem(url)}>X</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
+                  <label>Add More Images / GIFs</label>
+                  <input type="file" multiple accept="image/*,.gif" onChange={e => handleAddMediaToGalleryItem(Array.from(e.target.files))} style={{ padding: 14, border: "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.05)" }} />
+                  {galleryUploading && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 6 }}>Uploading...</div>}
+                </div>
+
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-glass" onClick={() => setEditingGalleryItem(null)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={handleSaveGalleryItem}>Save Changes</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1656,70 +1754,7 @@ export default function App() {
         ))}
       </div>
 
-      {/* Confirm Modal */}
-      {confirmModal && (
-        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="modal-content" style={{ padding: 32, textAlign: 'center' }}>
-            <h3 style={{ marginBottom: 16 }}>{confirmModal.message}</h3>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <button className="btn btn-glass" onClick={() => setConfirmModal(null)}>Cancel</button>
-              <button className="btn btn-danger" style={{ background: '#FF3B30', color: 'white' }} onClick={confirmModal.onConfirm}>Confirm</button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Edit Order Modal */}
-      {editingOrder && (
-        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
-          <div className="modal-content" style={{ padding: 32, width: '90%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ marginBottom: 24 }}>Edit Order: {editingOrder.ordername || "Untitled"}</h2>
-            
-            <div className="form-row">
-              <div style={{ flex: 1 }}><label>Name</label><input value={editingOrder.name || ""} onChange={e => setEditingOrder({...editingOrder, name: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
-              <div style={{ flex: 1 }}><label>Phone</label><input value={editingOrder.phone || ""} onChange={e => setEditingOrder({...editingOrder, phone: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
-            </div>
-            <div><label>Email</label><input value={editingOrder.email || ""} onChange={e => setEditingOrder({...editingOrder, email: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
-            <div className="form-row">
-              <div style={{ flex: 1 }}><label>Material</label><input value={editingOrder.material || ""} onChange={e => setEditingOrder({...editingOrder, material: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
-              <div style={{ flex: 1 }}><label>Color</label><input value={editingOrder.color || ""} onChange={e => setEditingOrder({...editingOrder, color: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
-            </div>
-            <div>
-              <label>Notes</label>
-              <textarea rows="3" value={getCleanNotes(editingOrder.notes)} onChange={e => setEditingOrder({...editingOrder, notes: setPrinterInNotes(e.target.value, getPrinterFromNotes(editingOrder.notes))})} style={{ width: '100%', marginBottom: 16 }} />
-            </div>
-            
-            <div>
-              <label>Files</label>
-              {editingOrder.fileurl ? editingOrder.fileurl.split(',').map((url, idx) => {
-                const parts = url.split('/');
-                const filename = parts[parts.length - 1];
-                return (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, wordBreak: 'break-all' }}>{filename}</span>
-                    <button className="btn btn-sm" style={{ background: '#FF3B30', color: 'white', padding: "4px 8px", border: "none", borderRadius: "var(--radius-full)", cursor: "pointer" }} onClick={async () => {
-                       if(!window.confirm("Permanently delete this file?")) return;
-                       const newUrls = editingOrder.fileurl.split(',').filter((_, i) => i !== idx);
-                       await supabase.storage.from('stl-files').remove([filename]);
-                       setEditingOrder({ ...editingOrder, fileurl: newUrls.join(',') });
-                    }}>Delete</button>
-                  </div>
-                );
-              }) : <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>No files attached.</div>}
-            </div>
-
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', marginTop: 32 }}>
-              <button className="btn btn-glass" onClick={() => setEditingOrder(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={async () => {
-                await supabase.from("orders").update(editingOrder).eq("id", editingOrder.id);
-                fetchOrders();
-                setEditingOrder(null);
-                addToast("Order updated", "success");
-              }}>Save Changes</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Gallery Product Detail Modal */}
       {activeGalleryItem && (() => {
@@ -1765,40 +1800,7 @@ export default function App() {
         );
       })()}
 
-      {/* Edit Gallery Item Modal */}
-      {editingGalleryItem && (
-        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
-          <div className="modal-content" style={{ padding: 32, width: '90%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ marginBottom: 24 }}>Edit Gallery Item</h2>
-            <div style={{ marginBottom: 16 }}><label>Title</label><input value={editingGalleryItem.title} onChange={e => setEditingGalleryItem({...editingGalleryItem, title: e.target.value})} /></div>
-            <div style={{ marginBottom: 16 }}><label>Description</label><textarea rows="3" value={editingGalleryItem.description || ""} onChange={e => setEditingGalleryItem({...editingGalleryItem, description: e.target.value})} /></div>
-            
-            <label>Media Files</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 12, marginBottom: 16 }}>
-              {editingGalleryItem.media_urls && editingGalleryItem.media_urls.split(',').filter(Boolean).map((url, idx) => (
-                <div key={idx} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: editingGalleryItem.cover_url === url ? '3px solid var(--accent)' : '1px solid var(--border-glass)' }}>
-                  <img src={url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
-                  <div style={{ display: 'flex', gap: 4, padding: 4 }}>
-                    <button style={{ flex: 1, fontSize: 10, padding: '4px', cursor: 'pointer', background: editingGalleryItem.cover_url === url ? 'var(--accent)' : 'rgba(255,255,255,0.1)', color: editingGalleryItem.cover_url === url ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: 4 }} onClick={() => setEditingGalleryItem({...editingGalleryItem, cover_url: url})}>Cover</button>
-                    <button style={{ fontSize: 10, padding: '4px 6px', cursor: 'pointer', background: '#FF3B30', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => handleRemoveMediaFromGalleryItem(url)}>X</button>
-                  </div>
-                </div>
-              ))}
-            </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <label>Add More Images / GIFs</label>
-              <input type="file" multiple accept="image/*,.gif" onChange={e => handleAddMediaToGalleryItem(Array.from(e.target.files))} style={{ padding: 14, border: "2px dashed var(--border-glass)", borderRadius: "var(--radius-sm)", background: "rgba(255,255,255,0.05)" }} />
-              {galleryUploading && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 6 }}>Uploading...</div>}
-            </div>
-
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
-              <button className="btn btn-glass" onClick={() => setEditingGalleryItem(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSaveGalleryItem}>Save Changes</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* -- FOOTER -- */}
       <footer className="site-footer">
