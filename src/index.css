@@ -65,6 +65,79 @@
   --shadow-glass-hover: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.2);
 }
 
+/* ── Dark Mode: Form Elements ── */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: rgba(20, 20, 35, 0.8);
+  color: #F0F0F5;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus {
+  background: rgba(25, 25, 45, 0.9);
+  border-color: var(--accent);
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #6E6E73;
+}
+
+/* Force dropdown options to have dark background */
+[data-theme="dark"] option {
+  background: #1E1E28;
+  color: #F0F0F5;
+}
+
+/* ── Dark Mode: Navigation links hover ── */
+[data-theme="dark"] .nav-links a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #F0F0F5;
+}
+
+/* ── Dark Mode: Cards & surfaces ── */
+[data-theme="dark"] .card {
+  background: rgba(25, 25, 40, 0.6);
+}
+
+[data-theme="dark"] .card:hover {
+  background: rgba(35, 35, 55, 0.7);
+}
+
+[data-theme="dark"] .admin-order-card {
+  background: rgba(25, 25, 40, 0.5);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .admin-gallery-card {
+  background: rgba(25, 25, 40, 0.5);
+}
+
+/* ── Dark Mode: btn-primary fix (white bg → dark bg) ── */
+[data-theme="dark"] .btn-primary {
+  background: #F0F0F5;
+  color: #0a0a0f;
+}
+
+/* ── Dark Mode: Modal backgrounds ── */
+[data-theme="dark"] .modal-content {
+  background: rgba(20, 20, 35, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ── Dark Mode: Labels ── */
+[data-theme="dark"] label {
+  color: #AEAEB2;
+}
+
+/* ── Dark Mode: Gallery modal ── */
+[data-theme="dark"] .gallery-modal {
+  background: rgba(15, 15, 25, 0.95);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 

@@ -485,6 +485,12 @@ export default function App() {
       if (newHash !== "#order") {
         setOrderStep(1);
       }
+      // Close all modals/editors when navigating away
+      setEditingGalleryItem(null);
+      setActiveGalleryItem(null);
+      setConfirmModal(null);
+      setEditingOrder(null);
+      setMobileMenuOpen(false);
       setHash(newHash);
     }
     window.addEventListener("hashchange", checkHash);
