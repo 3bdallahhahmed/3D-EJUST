@@ -233,26 +233,58 @@ const CubeIcon = () => (
 // FLOATING 3D ICONS COMPONENT
 // ═══════════════════════════════════════════════════════════
 function FloatingIcons({ icons }) {
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <div className="floating-icons-container">
-      {icons.map((icon, idx) => (
-        <img
-          key={idx}
-          src={`${import.meta.env.BASE_URL}assets/icons/${icon.src}`}
-          className="floating-icon"
-          style={{
-            width: icon.size,
-            top: icon.top,
-            bottom: icon.bottom,
-            left: icon.left,
-            right: icon.right,
-            animation: `${icon.reverse ? 'floatIconReverse' : 'floatIcon'} ${icon.duration || '6s'} ease-in-out infinite alternate`,
-            animationDelay: icon.delay || '0s',
-            opacity: icon.opacity || 0.85
-          }}
-          alt=""
-        />
-      ))}
+      {icons.map((icon, idx) => {
+        const speed = icon.parallaxSpeed || (idx % 2 === 0 ? 0.35 : -0.25);
+        const yOffset = scrollY * speed;
+
+        return (
+          <div 
+            key={idx}
+            style={{
+              position: 'absolute',
+              top: icon.top,
+              bottom: icon.bottom,
+              left: icon.left,
+              right: icon.right,
+              transform: `translateY(${yOffset}px)`,
+              transition: 'transform 0.1s cubic-bezier(0.2, 0, 0.2, 1)',
+              zIndex: 0
+            }}
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}assets/icons/${icon.src}`}
+              className="floating-icon"
+              style={{
+                width: icon.size,
+                animation: `${icon.reverse ? 'floatIconReverse' : 'floatIcon'} ${icon.duration || '6s'} ease-in-out infinite alternate`,
+                animationDelay: icon.delay || '0s',
+                opacity: icon.opacity || 0.85,
+                position: 'static'
+              }}
+              alt=""
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -589,12 +621,17 @@ export default function App() {
         media_urls: urls.join(','),
         cover_url: cover
       });
-      if (error) throw error;
+      if (error) {
+        console.error('Gallery insert error:', error);
+        addToast("Failed to add: " + error.message, "error");
+        return;
+      }
       setNewGalleryItem({ title: "", description: "" });
       setNewGalleryFiles([]);
       fetchGallery();
       addToast("Gallery item added!", "success");
     } catch (err) {
+      console.error('Add gallery item error:', err);
       addToast("Failed to add gallery item: " + err.message, "error");
     }
     setGalleryUploading(false);
@@ -604,30 +641,57 @@ export default function App() {
     setConfirmModal({
       message: `Delete "${item.title}" from gallery?`,
       onConfirm: async () => {
-        // Delete media files from storage
-        if (item.media_urls) {
-          const paths = item.media_urls.split(',').map(u => u.split('/').pop());
-          await supabase.storage.from('gallery-media').remove(paths);
+        try {
+          // Delete media files from Supabase Storage permanently
+          if (item.media_urls) {
+            const urls = item.media_urls.split(',').filter(Boolean);
+            for (const url of urls) {
+              // Extract the actual storage path from the public URL
+              const parts = url.split('/storage/v1/object/public/gallery-media/');
+              const storagePath = parts.length > 1 ? decodeURIComponent(parts[1]) : url.split('/').pop();
+              const { error: storageErr } = await supabase.storage.from('gallery-media').remove([storagePath]);
+              if (storageErr) console.error('Storage delete error:', storagePath, storageErr);
+            }
+          }
+          // Delete the database record
+          const { error: dbErr } = await supabase.from("gallery_items").delete().eq("id", item.id);
+          if (dbErr) {
+            console.error('DB delete error:', dbErr);
+            addToast("Failed to delete: " + dbErr.message, "error");
+          } else {
+            addToast("Gallery item deleted permanently.", "success");
+          }
+          fetchGallery();
+        } catch (err) {
+          console.error('Delete gallery item error:', err);
+          addToast("Delete failed: " + err.message, "error");
         }
-        await supabase.from("gallery_items").delete().eq("id", item.id);
-        fetchGallery();
         setConfirmModal(null);
-        addToast("Gallery item deleted.", "success");
       }
     });
   }
 
   async function handleSaveGalleryItem() {
     if (!editingGalleryItem) return;
-    await supabase.from("gallery_items").update({
-      title: editingGalleryItem.title,
-      description: editingGalleryItem.description,
-      media_urls: editingGalleryItem.media_urls,
-      cover_url: editingGalleryItem.cover_url
-    }).eq("id", editingGalleryItem.id);
-    fetchGallery();
-    setEditingGalleryItem(null);
-    addToast("Gallery item updated.", "success");
+    try {
+      const { error } = await supabase.from("gallery_items").update({
+        title: editingGalleryItem.title,
+        description: editingGalleryItem.description,
+        media_urls: editingGalleryItem.media_urls,
+        cover_url: editingGalleryItem.cover_url
+      }).eq("id", editingGalleryItem.id);
+      if (error) {
+        console.error('Gallery update error:', error);
+        addToast("Failed to save: " + error.message, "error");
+        return;
+      }
+      fetchGallery();
+      setEditingGalleryItem(null);
+      addToast("Gallery item updated.", "success");
+    } catch (err) {
+      console.error('Save gallery item error:', err);
+      addToast("Save failed: " + err.message, "error");
+    }
   }
 
   async function handleAddMediaToGalleryItem(files) {
@@ -655,14 +719,24 @@ export default function App() {
 
   async function handleRemoveMediaFromGalleryItem(urlToRemove) {
     if (!editingGalleryItem) return;
-    const filename = urlToRemove.split('/').pop();
-    await supabase.storage.from('gallery-media').remove([filename]);
-    const urls = editingGalleryItem.media_urls.split(',').filter(u => u !== urlToRemove);
-    const updatedItem = { ...editingGalleryItem, media_urls: urls.join(',') };
-    if (editingGalleryItem.cover_url === urlToRemove) {
-      updatedItem.cover_url = urls[0] || '';
+    try {
+      // Extract actual storage path from URL
+      const parts = urlToRemove.split('/storage/v1/object/public/gallery-media/');
+      const storagePath = parts.length > 1 ? decodeURIComponent(parts[1]) : urlToRemove.split('/').pop();
+      const { error: storageErr } = await supabase.storage.from('gallery-media').remove([storagePath]);
+      if (storageErr) console.error('Storage remove error:', storagePath, storageErr);
+      
+      const urls = editingGalleryItem.media_urls.split(',').filter(u => u !== urlToRemove);
+      const updatedItem = { ...editingGalleryItem, media_urls: urls.join(',') };
+      if (editingGalleryItem.cover_url === urlToRemove) {
+        updatedItem.cover_url = urls[0] || '';
+      }
+      setEditingGalleryItem(updatedItem);
+      addToast("Media file permanently deleted.", "success");
+    } catch (err) {
+      console.error('Remove media error:', err);
+      addToast("Failed to remove media: " + err.message, "error");
     }
-    setEditingGalleryItem(updatedItem);
   }
 
   async function handleAdminLogin() {
@@ -791,8 +865,28 @@ export default function App() {
     setConfirmModal({
       message: "Delete this order permanently?",
       onConfirm: async () => {
-        await supabase.from("orders").delete().eq("id", id);
-        addToast("Order deleted", "success");
+        try {
+          // Find the order to get its file URLs
+          const order = orders.find(o => o.id === id);
+          if (order && order.fileurl) {
+            const fileUrls = order.fileurl.split(',').filter(Boolean);
+            for (const url of fileUrls) {
+              const parts = url.split('/storage/v1/object/public/stl-files/');
+              const storagePath = parts.length > 1 ? decodeURIComponent(parts[1]) : url.split('/').pop();
+              const { error: storageErr } = await supabase.storage.from('stl-files').remove([storagePath]);
+              if (storageErr) console.error('STL storage delete error:', storagePath, storageErr);
+            }
+          }
+          const { error } = await supabase.from("orders").delete().eq("id", id);
+          if (error) {
+            addToast("Delete failed: " + error.message, "error");
+          } else {
+            addToast("Order deleted permanently", "success");
+          }
+        } catch (err) {
+          console.error('Delete order error:', err);
+          addToast("Delete failed: " + err.message, "error");
+        }
         setConfirmModal(null);
         fetchOrders();
       }
