@@ -12,16 +12,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publisha
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const PRINTERS = ["CC Abdalla", "CC Mazen"];
-const BASE_PATH = import.meta.env.BASE_URL || '/3D-EJUST/';
-function getPath() {
-  const p = window.location.pathname.replace(BASE_PATH, '/').replace(/\/+/g, '/');
-  return p === '/' ? '/home' : p;
-}
-function navigate(to) {
-  window.history.pushState(null, '', BASE_PATH.replace(/\/$/, '') + to);
-  window.dispatchEvent(new PopStateEvent('popstate'));
-}
-const VALID_PATHS = ["/home", "/order", "/track", "/full-gallery", "/boss", "/why", "/about", "/contact", "/gallery"];
+const VALID_HASHES = ["", "#home", "#order", "#track", "#full-gallery", "#boss", "#why", "#about", "#contact", "#gallery"];
 
 // ─────────────────────────────────────────────────────────
 // Helpers
@@ -242,26 +233,58 @@ const CubeIcon = () => (
 // FLOATING 3D ICONS COMPONENT
 // ═══════════════════════════════════════════════════════════
 function FloatingIcons({ icons }) {
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <div className="floating-icons-container">
-      {icons.map((icon, idx) => (
-        <img
-          key={idx}
-          src={`${import.meta.env.BASE_URL}assets/icons/${icon.src}`}
-          className="floating-icon"
-          style={{
-            width: icon.size,
-            top: icon.top,
-            bottom: icon.bottom,
-            left: icon.left,
-            right: icon.right,
-            animation: `${icon.reverse ? 'floatIconReverse' : 'floatIcon'} ${icon.duration || '6s'} ease-in-out infinite alternate`,
-            animationDelay: icon.delay || '0s',
-            opacity: icon.opacity || 0.85
-          }}
-          alt=""
-        />
-      ))}
+      {icons.map((icon, idx) => {
+        const speed = icon.parallaxSpeed || (idx % 2 === 0 ? 0.35 : -0.25);
+        const yOffset = scrollY * speed;
+
+        return (
+          <div 
+            key={idx}
+            style={{
+              position: 'absolute',
+              top: icon.top,
+              bottom: icon.bottom,
+              left: icon.left,
+              right: icon.right,
+              transform: `translateY(${yOffset}px)`,
+              transition: 'transform 0.1s cubic-bezier(0.2, 0, 0.2, 1)',
+              zIndex: 0
+            }}
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}assets/icons/${icon.src}`}
+              className="floating-icon"
+              style={{
+                width: icon.size,
+                animation: `${icon.reverse ? 'floatIconReverse' : 'floatIcon'} ${icon.duration || '6s'} ease-in-out infinite alternate`,
+                animationDelay: icon.delay || '0s',
+                opacity: icon.opacity || 0.85,
+                position: 'static'
+              }}
+              alt=""
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -338,7 +361,7 @@ function NotFoundPage() {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          navigate('/home');
+          window.location.hash = "#home";
           return 0;
         }
         return prev - 1;
@@ -356,7 +379,7 @@ function NotFoundPage() {
         <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 24 }}>
           Redirecting to home in <strong style={{ color: 'var(--accent)', fontSize: 18 }}>{countdown}</strong> seconds…
         </p>
-        <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} className="btn btn-accent">← Go Home Now</a>
+        <a href="#home" className="btn btn-accent">← Go Home Now</a>
       </div>
     </section>
   );
@@ -403,7 +426,7 @@ function FullGalleryView({ items, onItemClick }) {
         <h1>Full Gallery</h1>
         <p style={{ maxWidth: 500, margin: "0 auto" }}>Explore everything we've printed. From functional mechanical parts to beautiful art pieces.</p>
         <div style={{ marginTop: 24 }}>
-          <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} className="btn btn-glass">Back to Home</a>
+          <a href="#home" className="btn btn-glass">Back to Home</a>
         </div>
       </div>
       <div className="gallery-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
@@ -427,7 +450,7 @@ export default function App() {
   const [queuedOrdersCount, setQueuedOrdersCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
-  const [path, setPath] = useState(getPath());
+  const [hash, setHash] = useState(window.location.hash);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -544,16 +567,16 @@ export default function App() {
       document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
     }, 100);
     return () => { clearTimeout(timer); observer.disconnect(); };
-  }, [path, isAdmin]);
+  }, [hash, isAdmin]);
 
   // Handle cross-page hash scrolling
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (path && !["/full-gallery", "/boss", "/order", "/track", "/home"].includes(path)) {
-      const el = document.getElementById(path.replace("/", ""));
+    if (hash && !["#full-gallery", "#boss", "#order", "#track", "#home", ""].includes(hash)) {
+      const el = document.getElementById(hash.replace("#", ""));
       if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 100);
     }
-  }, [path]);
+  }, [hash]);
 
   async function fetchOrders() {
     if (isAdmin) {
@@ -820,7 +843,7 @@ export default function App() {
 
   async function handleAdminLogout() {
     await supabase.auth.signOut();
-    navigate('/home');
+    window.location.hash = "";
   }
 
   async function handleUpdateOrderStatus(id, newStatus, printer) {
@@ -951,7 +974,7 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════
   // LOGIN VIEW
   // ═══════════════════════════════════════════════════════════
-  if (path === "/boss" && !isAdmin) {
+  if (hash === "#boss" && !isAdmin) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-page)' }}>
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/></div>
@@ -970,7 +993,7 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════
   // ADMIN DASHBOARD
   // ═══════════════════════════════════════════════════════════
-  if (path === "/boss" && isAdmin) {
+  if (hash === "#boss" && isAdmin) {
     return (
       <div className="admin-container">
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/><div className="bg-orb bg-orb-3"/></div>
@@ -1251,7 +1274,7 @@ export default function App() {
 
       {/* Navigation */}
       <nav className="header">
-        <a href="/home" className="logo" style={{ textDecoration: "none" }} onClick={(e) => { e.preventDefault(); navigate('/home'); setMobileMenuOpen(false); }}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
+        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
         <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
           <span className={`hamburger ${mobileMenuOpen ? "open" : ""}`}>
             <span /><span /><span />
@@ -1261,29 +1284,29 @@ export default function App() {
           <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
             {darkMode ? <SunIcon /> : <MoonIcon />}
           </button>
-          <a href="/why" onClick={(e) => { e.preventDefault(); navigate('/why'); setMobileMenuOpen(false); }}>Why Us</a>
-          <a href="/full-gallery" onClick={(e) => { e.preventDefault(); navigate('/full-gallery'); setMobileMenuOpen(false); }}>Gallery</a>
-          <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); setMobileMenuOpen(false); }}>Order</a>
-          <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); setMobileMenuOpen(false); }}>Track</a>
-          <a href="/contact" onClick={(e) => { e.preventDefault(); navigate('/contact'); setMobileMenuOpen(false); }}>Contact</a>
+          <a href="#why" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
+          <a href="#full-gallery" onClick={() => setMobileMenuOpen(false)}>Gallery</a>
+          <a href="#order" onClick={() => setMobileMenuOpen(false)}>Order</a>
+          <a href="#track" onClick={() => setMobileMenuOpen(false)}>Track</a>
+          <a href="#contact" onClick={() => setMobileMenuOpen(false)}>Contact</a>
         </div>
       </nav>
 
-      {config.announcement_active && config.announcement_text && path !== "/boss" && (
+      {config.announcement_active && config.announcement_text && hash !== "#boss" && (
         <div style={{ background: "var(--accent-gradient)", color: "#fff", textAlign: "center", padding: "12px 24px", fontSize: 14, fontWeight: 600, marginTop: 80, marginInline: 24, borderRadius: "var(--radius-full)", position: "relative", zIndex: 50, boxShadow: "var(--accent-glow)" }}>
           {config.announcement_text}
         </div>
       )}
 
       <main>
-        {path === "/full-gallery" && <FullGalleryView items={galleryItems} onItemClick={(item) => { setActiveGalleryItem(item); setActiveMediaIndex(0); }} />}
+        {hash === "#full-gallery" && <FullGalleryView items={galleryItems} onItemClick={(item) => { setActiveGalleryItem(item); setActiveMediaIndex(0); }} />}
         
-        {path === "/order" && (
+        {hash === "#order" && (
           <section className="section-container animate-in" style={{ paddingTop: 140, minHeight: "100vh", position: "relative", zIndex: 10 }}>
             <div style={{ textAlign: "center", marginBottom: 32 }}>
               <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 8 }}>{orderStep === 4 ? "Order Received!" : "Place Order"}</h1>
               {orderStep < 4 && <p style={{ margin: 0 }}>Step {orderStep} of 3</p>}
-              {orderStep === 1 && <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} style={{ display: "inline-block", marginTop: 8, fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Cancel</a>}
+              {orderStep === 1 && <a href="#home" style={{ display: "inline-block", marginTop: 8, fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Cancel</a>}
             </div>
             
             {orderStep < 4 && (
@@ -1433,8 +1456,8 @@ export default function App() {
                   </div>
                   
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
-                    <a href="/track" className="btn btn-accent" style={{ width: "100%" }} onClick={(e) => { e.preventDefault(); navigate('/track'); setOrderStep(1); }}>Go Track Your Order</a>
-                    <a href="/home" className="btn btn-glass" style={{ width: "100%" }} onClick={(e) => { e.preventDefault(); navigate('/home'); setOrderStep(1); }}>← Back to Home</a>
+                    <a href="#track" className="btn btn-accent" style={{ width: "100%" }} onClick={() => setOrderStep(1)}>Go Track Your Order</a>
+                    <a href="#home" className="btn btn-glass" style={{ width: "100%" }} onClick={() => setOrderStep(1)}>← Back to Home</a>
                   </div>
                 </div>
               )}
@@ -1442,7 +1465,7 @@ export default function App() {
           </section>
         )}
 
-        {path === "/track" && (
+        {hash === "#track" && (
           <section className="section-container animate-in" style={{ paddingTop: 140, minHeight: "100vh", position: "relative", zIndex: 10 }}>
             <div style={{ textAlign: "center", marginBottom: 40 }}>
               <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 12 }}>Track Your Order</h1>
@@ -1452,7 +1475,7 @@ export default function App() {
                   <div className="live-dot" />
                   <span><strong>{queuedOrdersCount}</strong> in queue</span>
                 </div>
-                <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} style={{ fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Back to Home</a>
+                <a href="#home" style={{ fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Back to Home</a>
               </div>
             </div>
             
@@ -1500,9 +1523,9 @@ export default function App() {
           </section>
         )}
 
-        {!VALID_PATHS.includes(path) && <NotFoundPage />}
+        {!VALID_HASHES.includes(hash) && <NotFoundPage />}
 
-        {(VALID_PATHS.includes(path) && path !== "/full-gallery" && path !== "/order" && path !== "/track") && (
+        {(VALID_HASHES.includes(hash) && hash !== "#full-gallery" && hash !== "#order" && hash !== "#track") && (
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
@@ -1514,13 +1537,13 @@ export default function App() {
           <h1>{config.hero_title}</h1>
           <p>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); }} className="btn btn-accent">Place an Order</a>
+            <a href="#order" className="btn btn-accent">Place an Order</a>
             {config.whatsapp_number && (
               <a href={`https://wa.me/${config.whatsapp_number.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("Hello! I'd like to place an order.")}`} target="_blank" rel="noreferrer" className="btn btn-glass" style={{ gap: 8 }}>
                 <WhatsAppIcon /> Order via WhatsApp
               </a>
             )}
-            <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); }} className="btn btn-glass">Track Order</a>
+            <a href="#track" className="btn btn-glass">Track Order</a>
           </div>
         </section>
 
@@ -1576,7 +1599,7 @@ export default function App() {
             ))}
           </div>
           <div style={{ textAlign: "center", marginTop: 48 }}>
-            <a href="/full-gallery" onClick={(e) => { e.preventDefault(); navigate('/full-gallery'); }} className="btn btn-glass">View Full Gallery</a>
+            <a href="#full-gallery" className="btn btn-glass">View Full Gallery</a>
           </div>
         </section>
 
@@ -1616,8 +1639,8 @@ export default function App() {
         </section>
         </>
         )}
-        {path !== "/order" && path !== "/boss" && (
-          <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); }} className="floating-cta">
+        {hash !== "#order" && hash !== "#boss" && (
+          <a href="#order" className="floating-cta">
             Order Now
           </a>
         )}
@@ -1786,10 +1809,10 @@ export default function App() {
           </div>
           <div className="footer-col">
             <h4>Quick Links</h4>
-            <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); }}>Place Order</a>
-            <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); }}>Track Order</a>
-            <a href="/full-gallery" onClick={(e) => { e.preventDefault(); navigate('/full-gallery'); }}>Gallery</a>
-            <a href="/about" onClick={(e) => { e.preventDefault(); navigate('/about'); }}>About</a>
+            <a href="#order">Place Order</a>
+            <a href="#track">Track Order</a>
+            <a href="#full-gallery">Gallery</a>
+            <a href="#about">About</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setPrivacyModalOpen(true); }}>Privacy Policy</a>
           </div>
           <div className="footer-col">
