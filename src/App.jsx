@@ -12,7 +12,16 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publisha
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const PRINTERS = ["CC Abdalla", "CC Mazen"];
-const VALID_HASHES = ["", "#home", "#order", "#track", "#full-gallery", "#boss", "#why", "#about", "#contact", "#gallery"];
+const BASE_PATH = import.meta.env.BASE_URL || '/3D-EJUST/';
+function getPath() {
+  const p = window.location.pathname.replace(BASE_PATH, '/').replace(/\/+/g, '/');
+  return p === '/' ? '/home' : p;
+}
+function navigate(to) {
+  window.history.pushState(null, '', BASE_PATH.replace(/\/$/, '') + to);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+const VALID_PATHS = ["/home", "/order", "/track", "/full-gallery", "/boss", "/why", "/about", "/contact", "/gallery"];
 
 // ─────────────────────────────────────────────────────────
 // Helpers
@@ -329,7 +338,7 @@ function NotFoundPage() {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          window.location.hash = "#home";
+          navigate('/home');
           return 0;
         }
         return prev - 1;
@@ -347,7 +356,7 @@ function NotFoundPage() {
         <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 24 }}>
           Redirecting to home in <strong style={{ color: 'var(--accent)', fontSize: 18 }}>{countdown}</strong> seconds…
         </p>
-        <a href="#home" className="btn btn-accent">← Go Home Now</a>
+        <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} className="btn btn-accent">← Go Home Now</a>
       </div>
     </section>
   );
@@ -394,7 +403,7 @@ function FullGalleryView({ items, onItemClick }) {
         <h1>Full Gallery</h1>
         <p style={{ maxWidth: 500, margin: "0 auto" }}>Explore everything we've printed. From functional mechanical parts to beautiful art pieces.</p>
         <div style={{ marginTop: 24 }}>
-          <a href="#home" className="btn btn-glass">Back to Home</a>
+          <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} className="btn btn-glass">Back to Home</a>
         </div>
       </div>
       <div className="gallery-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
@@ -418,7 +427,7 @@ export default function App() {
   const [queuedOrdersCount, setQueuedOrdersCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
-  const [hash, setHash] = useState(window.location.hash);
+  const [path, setPath] = useState(getPath());
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -535,16 +544,16 @@ export default function App() {
       document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
     }, 100);
     return () => { clearTimeout(timer); observer.disconnect(); };
-  }, [hash, isAdmin]);
+  }, [path, isAdmin]);
 
   // Handle cross-page hash scrolling
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (hash && !["#full-gallery", "#boss", "#order", "#track", "#home", ""].includes(hash)) {
-      const el = document.getElementById(hash.replace("#", ""));
+    if (path && !["/full-gallery", "/boss", "/order", "/track", "/home"].includes(path)) {
+      const el = document.getElementById(path.replace("/", ""));
       if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 100);
     }
-  }, [hash]);
+  }, [path]);
 
   async function fetchOrders() {
     if (isAdmin) {
@@ -589,12 +598,17 @@ export default function App() {
         media_urls: urls.join(','),
         cover_url: cover
       });
-      if (error) throw error;
+      if (error) {
+        console.error('Gallery insert error:', error);
+        addToast("Failed to add: " + error.message, "error");
+        return;
+      }
       setNewGalleryItem({ title: "", description: "" });
       setNewGalleryFiles([]);
       fetchGallery();
       addToast("Gallery item added!", "success");
     } catch (err) {
+      console.error('Add gallery item error:', err);
       addToast("Failed to add gallery item: " + err.message, "error");
     }
     setGalleryUploading(false);
@@ -604,30 +618,57 @@ export default function App() {
     setConfirmModal({
       message: `Delete "${item.title}" from gallery?`,
       onConfirm: async () => {
-        // Delete media files from storage
-        if (item.media_urls) {
-          const paths = item.media_urls.split(',').map(u => u.split('/').pop());
-          await supabase.storage.from('gallery-media').remove(paths);
+        try {
+          // Delete media files from Supabase Storage permanently
+          if (item.media_urls) {
+            const urls = item.media_urls.split(',').filter(Boolean);
+            for (const url of urls) {
+              // Extract the actual storage path from the public URL
+              const parts = url.split('/storage/v1/object/public/gallery-media/');
+              const storagePath = parts.length > 1 ? decodeURIComponent(parts[1]) : url.split('/').pop();
+              const { error: storageErr } = await supabase.storage.from('gallery-media').remove([storagePath]);
+              if (storageErr) console.error('Storage delete error:', storagePath, storageErr);
+            }
+          }
+          // Delete the database record
+          const { error: dbErr } = await supabase.from("gallery_items").delete().eq("id", item.id);
+          if (dbErr) {
+            console.error('DB delete error:', dbErr);
+            addToast("Failed to delete: " + dbErr.message, "error");
+          } else {
+            addToast("Gallery item deleted permanently.", "success");
+          }
+          fetchGallery();
+        } catch (err) {
+          console.error('Delete gallery item error:', err);
+          addToast("Delete failed: " + err.message, "error");
         }
-        await supabase.from("gallery_items").delete().eq("id", item.id);
-        fetchGallery();
         setConfirmModal(null);
-        addToast("Gallery item deleted.", "success");
       }
     });
   }
 
   async function handleSaveGalleryItem() {
     if (!editingGalleryItem) return;
-    await supabase.from("gallery_items").update({
-      title: editingGalleryItem.title,
-      description: editingGalleryItem.description,
-      media_urls: editingGalleryItem.media_urls,
-      cover_url: editingGalleryItem.cover_url
-    }).eq("id", editingGalleryItem.id);
-    fetchGallery();
-    setEditingGalleryItem(null);
-    addToast("Gallery item updated.", "success");
+    try {
+      const { error } = await supabase.from("gallery_items").update({
+        title: editingGalleryItem.title,
+        description: editingGalleryItem.description,
+        media_urls: editingGalleryItem.media_urls,
+        cover_url: editingGalleryItem.cover_url
+      }).eq("id", editingGalleryItem.id);
+      if (error) {
+        console.error('Gallery update error:', error);
+        addToast("Failed to save: " + error.message, "error");
+        return;
+      }
+      fetchGallery();
+      setEditingGalleryItem(null);
+      addToast("Gallery item updated.", "success");
+    } catch (err) {
+      console.error('Save gallery item error:', err);
+      addToast("Save failed: " + err.message, "error");
+    }
   }
 
   async function handleAddMediaToGalleryItem(files) {
@@ -655,14 +696,24 @@ export default function App() {
 
   async function handleRemoveMediaFromGalleryItem(urlToRemove) {
     if (!editingGalleryItem) return;
-    const filename = urlToRemove.split('/').pop();
-    await supabase.storage.from('gallery-media').remove([filename]);
-    const urls = editingGalleryItem.media_urls.split(',').filter(u => u !== urlToRemove);
-    const updatedItem = { ...editingGalleryItem, media_urls: urls.join(',') };
-    if (editingGalleryItem.cover_url === urlToRemove) {
-      updatedItem.cover_url = urls[0] || '';
+    try {
+      // Extract actual storage path from URL
+      const parts = urlToRemove.split('/storage/v1/object/public/gallery-media/');
+      const storagePath = parts.length > 1 ? decodeURIComponent(parts[1]) : urlToRemove.split('/').pop();
+      const { error: storageErr } = await supabase.storage.from('gallery-media').remove([storagePath]);
+      if (storageErr) console.error('Storage remove error:', storagePath, storageErr);
+      
+      const urls = editingGalleryItem.media_urls.split(',').filter(u => u !== urlToRemove);
+      const updatedItem = { ...editingGalleryItem, media_urls: urls.join(',') };
+      if (editingGalleryItem.cover_url === urlToRemove) {
+        updatedItem.cover_url = urls[0] || '';
+      }
+      setEditingGalleryItem(updatedItem);
+      addToast("Media file permanently deleted.", "success");
+    } catch (err) {
+      console.error('Remove media error:', err);
+      addToast("Failed to remove media: " + err.message, "error");
     }
-    setEditingGalleryItem(updatedItem);
   }
 
   async function handleAdminLogin() {
@@ -769,7 +820,7 @@ export default function App() {
 
   async function handleAdminLogout() {
     await supabase.auth.signOut();
-    window.location.hash = "";
+    navigate('/home');
   }
 
   async function handleUpdateOrderStatus(id, newStatus, printer) {
@@ -791,8 +842,28 @@ export default function App() {
     setConfirmModal({
       message: "Delete this order permanently?",
       onConfirm: async () => {
-        await supabase.from("orders").delete().eq("id", id);
-        addToast("Order deleted", "success");
+        try {
+          // Find the order to get its file URLs
+          const order = orders.find(o => o.id === id);
+          if (order && order.fileurl) {
+            const fileUrls = order.fileurl.split(',').filter(Boolean);
+            for (const url of fileUrls) {
+              const parts = url.split('/storage/v1/object/public/stl-files/');
+              const storagePath = parts.length > 1 ? decodeURIComponent(parts[1]) : url.split('/').pop();
+              const { error: storageErr } = await supabase.storage.from('stl-files').remove([storagePath]);
+              if (storageErr) console.error('STL storage delete error:', storagePath, storageErr);
+            }
+          }
+          const { error } = await supabase.from("orders").delete().eq("id", id);
+          if (error) {
+            addToast("Delete failed: " + error.message, "error");
+          } else {
+            addToast("Order deleted permanently", "success");
+          }
+        } catch (err) {
+          console.error('Delete order error:', err);
+          addToast("Delete failed: " + err.message, "error");
+        }
         setConfirmModal(null);
         fetchOrders();
       }
@@ -880,7 +951,7 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════
   // LOGIN VIEW
   // ═══════════════════════════════════════════════════════════
-  if (hash === "#boss" && !isAdmin) {
+  if (path === "/boss" && !isAdmin) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-page)' }}>
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/></div>
@@ -899,7 +970,7 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════
   // ADMIN DASHBOARD
   // ═══════════════════════════════════════════════════════════
-  if (hash === "#boss" && isAdmin) {
+  if (path === "/boss" && isAdmin) {
     return (
       <div className="admin-container">
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/><div className="bg-orb bg-orb-3"/></div>
@@ -1180,7 +1251,7 @@ export default function App() {
 
       {/* Navigation */}
       <nav className="header">
-        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
+        <a href="/home" className="logo" style={{ textDecoration: "none" }} onClick={(e) => { e.preventDefault(); navigate('/home'); setMobileMenuOpen(false); }}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
         <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
           <span className={`hamburger ${mobileMenuOpen ? "open" : ""}`}>
             <span /><span /><span />
@@ -1190,29 +1261,29 @@ export default function App() {
           <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
             {darkMode ? <SunIcon /> : <MoonIcon />}
           </button>
-          <a href="#why" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
-          <a href="#full-gallery" onClick={() => setMobileMenuOpen(false)}>Gallery</a>
-          <a href="#order" onClick={() => setMobileMenuOpen(false)}>Order</a>
-          <a href="#track" onClick={() => setMobileMenuOpen(false)}>Track</a>
-          <a href="#contact" onClick={() => setMobileMenuOpen(false)}>Contact</a>
+          <a href="/why" onClick={(e) => { e.preventDefault(); navigate('/why'); setMobileMenuOpen(false); }}>Why Us</a>
+          <a href="/full-gallery" onClick={(e) => { e.preventDefault(); navigate('/full-gallery'); setMobileMenuOpen(false); }}>Gallery</a>
+          <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); setMobileMenuOpen(false); }}>Order</a>
+          <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); setMobileMenuOpen(false); }}>Track</a>
+          <a href="/contact" onClick={(e) => { e.preventDefault(); navigate('/contact'); setMobileMenuOpen(false); }}>Contact</a>
         </div>
       </nav>
 
-      {config.announcement_active && config.announcement_text && hash !== "#boss" && (
+      {config.announcement_active && config.announcement_text && path !== "/boss" && (
         <div style={{ background: "var(--accent-gradient)", color: "#fff", textAlign: "center", padding: "12px 24px", fontSize: 14, fontWeight: 600, marginTop: 80, marginInline: 24, borderRadius: "var(--radius-full)", position: "relative", zIndex: 50, boxShadow: "var(--accent-glow)" }}>
           {config.announcement_text}
         </div>
       )}
 
       <main>
-        {hash === "#full-gallery" && <FullGalleryView items={galleryItems} onItemClick={(item) => { setActiveGalleryItem(item); setActiveMediaIndex(0); }} />}
+        {path === "/full-gallery" && <FullGalleryView items={galleryItems} onItemClick={(item) => { setActiveGalleryItem(item); setActiveMediaIndex(0); }} />}
         
-        {hash === "#order" && (
+        {path === "/order" && (
           <section className="section-container animate-in" style={{ paddingTop: 140, minHeight: "100vh", position: "relative", zIndex: 10 }}>
             <div style={{ textAlign: "center", marginBottom: 32 }}>
               <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 8 }}>{orderStep === 4 ? "Order Received!" : "Place Order"}</h1>
               {orderStep < 4 && <p style={{ margin: 0 }}>Step {orderStep} of 3</p>}
-              {orderStep === 1 && <a href="#home" style={{ display: "inline-block", marginTop: 8, fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Cancel</a>}
+              {orderStep === 1 && <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} style={{ display: "inline-block", marginTop: 8, fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Cancel</a>}
             </div>
             
             {orderStep < 4 && (
@@ -1362,8 +1433,8 @@ export default function App() {
                   </div>
                   
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
-                    <a href="#track" className="btn btn-accent" style={{ width: "100%" }} onClick={() => setOrderStep(1)}>Go Track Your Order</a>
-                    <a href="#home" className="btn btn-glass" style={{ width: "100%" }} onClick={() => setOrderStep(1)}>← Back to Home</a>
+                    <a href="/track" className="btn btn-accent" style={{ width: "100%" }} onClick={(e) => { e.preventDefault(); navigate('/track'); setOrderStep(1); }}>Go Track Your Order</a>
+                    <a href="/home" className="btn btn-glass" style={{ width: "100%" }} onClick={(e) => { e.preventDefault(); navigate('/home'); setOrderStep(1); }}>← Back to Home</a>
                   </div>
                 </div>
               )}
@@ -1371,7 +1442,7 @@ export default function App() {
           </section>
         )}
 
-        {hash === "#track" && (
+        {path === "/track" && (
           <section className="section-container animate-in" style={{ paddingTop: 140, minHeight: "100vh", position: "relative", zIndex: 10 }}>
             <div style={{ textAlign: "center", marginBottom: 40 }}>
               <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 12 }}>Track Your Order</h1>
@@ -1381,7 +1452,7 @@ export default function App() {
                   <div className="live-dot" />
                   <span><strong>{queuedOrdersCount}</strong> in queue</span>
                 </div>
-                <a href="#home" style={{ fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Back to Home</a>
+                <a href="/home" onClick={(e) => { e.preventDefault(); navigate('/home'); }} style={{ fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none", fontWeight: 600 }}>← Back to Home</a>
               </div>
             </div>
             
@@ -1429,9 +1500,9 @@ export default function App() {
           </section>
         )}
 
-        {!VALID_HASHES.includes(hash) && <NotFoundPage />}
+        {!VALID_PATHS.includes(path) && <NotFoundPage />}
 
-        {(VALID_HASHES.includes(hash) && hash !== "#full-gallery" && hash !== "#order" && hash !== "#track") && (
+        {(VALID_PATHS.includes(path) && path !== "/full-gallery" && path !== "/order" && path !== "/track") && (
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
@@ -1443,13 +1514,13 @@ export default function App() {
           <h1>{config.hero_title}</h1>
           <p>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <a href="#order" className="btn btn-accent">Place an Order</a>
+            <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); }} className="btn btn-accent">Place an Order</a>
             {config.whatsapp_number && (
               <a href={`https://wa.me/${config.whatsapp_number.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("Hello! I'd like to place an order.")}`} target="_blank" rel="noreferrer" className="btn btn-glass" style={{ gap: 8 }}>
                 <WhatsAppIcon /> Order via WhatsApp
               </a>
             )}
-            <a href="#track" className="btn btn-glass">Track Order</a>
+            <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); }} className="btn btn-glass">Track Order</a>
           </div>
         </section>
 
@@ -1505,7 +1576,7 @@ export default function App() {
             ))}
           </div>
           <div style={{ textAlign: "center", marginTop: 48 }}>
-            <a href="#full-gallery" className="btn btn-glass">View Full Gallery</a>
+            <a href="/full-gallery" onClick={(e) => { e.preventDefault(); navigate('/full-gallery'); }} className="btn btn-glass">View Full Gallery</a>
           </div>
         </section>
 
@@ -1545,8 +1616,8 @@ export default function App() {
         </section>
         </>
         )}
-        {hash !== "#order" && hash !== "#boss" && (
-          <a href="#order" className="floating-cta">
+        {path !== "/order" && path !== "/boss" && (
+          <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); }} className="floating-cta">
             Order Now
           </a>
         )}
@@ -1715,10 +1786,10 @@ export default function App() {
           </div>
           <div className="footer-col">
             <h4>Quick Links</h4>
-            <a href="#order">Place Order</a>
-            <a href="#track">Track Order</a>
-            <a href="#full-gallery">Gallery</a>
-            <a href="#about">About</a>
+            <a href="/order" onClick={(e) => { e.preventDefault(); navigate('/order'); }}>Place Order</a>
+            <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); }}>Track Order</a>
+            <a href="/full-gallery" onClick={(e) => { e.preventDefault(); navigate('/full-gallery'); }}>Gallery</a>
+            <a href="/about" onClick={(e) => { e.preventDefault(); navigate('/about'); }}>About</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setPrivacyModalOpen(true); }}>Privacy Policy</a>
           </div>
           <div className="footer-col">
