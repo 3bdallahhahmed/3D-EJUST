@@ -449,7 +449,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [queuedOrdersCount, setQueuedOrdersCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") !== "light");
   const [hash, setHash] = useState(window.location.hash);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -1373,15 +1373,20 @@ export default function App() {
       {/* Navigation */}
       <nav className="header">
         <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
-        <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
-          <span className={`hamburger ${mobileMenuOpen ? "open" : ""}`}>
-            <span /><span /><span />
-          </span>
-        </button>
-        <div className={`nav-links ${mobileMenuOpen ? "nav-open" : ""}`}>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
             {darkMode ? <SunIcon /> : <MoonIcon />}
           </button>
+          
+          <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
+            <span className={`hamburger ${mobileMenuOpen ? "open" : ""}`}>
+              <span /><span /><span />
+            </span>
+          </button>
+        </div>
+
+        <div className={`nav-links ${mobileMenuOpen ? "nav-open" : ""}`}>
           <a href="#why" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
           <a href="#full-gallery" onClick={() => setMobileMenuOpen(false)}>Gallery</a>
           <a href="#order" onClick={() => setMobileMenuOpen(false)}>Order</a>
@@ -1628,9 +1633,9 @@ export default function App() {
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
           <FloatingIcons icons={[
-            { src: '1.png', size: 140, top: '15%', left: '-10%', delay: '0s', duration: '6s' },
-            { src: '2.png', size: 100, bottom: '20%', right: '-5%', delay: '1s', duration: '7s', reverse: true },
-            { src: '20.png', size: 80, top: '10%', right: '15%', delay: '2s', duration: '5s' }
+            { src: '1.png', size: 140, top: '15%', left: '-25%', delay: '0s', duration: '6s' },
+            { src: '2.png', size: 100, bottom: '20%', right: '-25%', delay: '1s', duration: '7s', reverse: true },
+            { src: '20.png', size: 80, top: '5%', right: '-10%', delay: '2s', duration: '5s' }
           ]} />
           <h1>{config.hero_title}</h1>
           <p>{config.hero_subtitle}</p>
@@ -1648,8 +1653,8 @@ export default function App() {
         {/* ── WHY US ── */}
         <section id="why" className="section-container reveal">
           <FloatingIcons icons={[
-            { src: '5.png', size: 120, top: '5%', right: '-8%', delay: '0.5s', duration: '6.5s' },
-            { src: '6.png', size: 90, bottom: '10%', left: '-5%', delay: '1.5s', duration: '5.5s', reverse: true }
+            { src: '5.png', size: 120, top: '5%', right: '-25%', delay: '0.5s', duration: '6.5s' },
+            { src: '6.png', size: 90, bottom: '10%', left: '-25%', delay: '1.5s', duration: '5.5s', reverse: true }
           ]} />
           <h2>{config.why_title}</h2>
           <p>{config.why_text}</p>
@@ -1671,8 +1676,8 @@ export default function App() {
         {/* -- GALLERY -- */}
         <section id="gallery" className="gallery-section reveal">
           <FloatingIcons icons={[
-            { src: '22.png', size: 110, top: '20%', left: '-12%', delay: '1s', duration: '6s' },
-            { src: '7.png', size: 85, bottom: '15%', right: '-10%', delay: '0s', duration: '7s', reverse: true }
+            { src: '22.png', size: 110, top: '20%', left: '-25%', delay: '1s', duration: '6s' },
+            { src: '7.png', size: 85, bottom: '15%', right: '-25%', delay: '0s', duration: '7s', reverse: true }
           ]} />
           <div style={{ textAlign: "center", marginBottom: 56 }}>
             <h2>Our Work</h2>
