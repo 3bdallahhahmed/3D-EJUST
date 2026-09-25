@@ -25,13 +25,27 @@ function generateTrackingCode() {
 }
 
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).catch(() => {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
+  return new Promise((resolve) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(resolve).catch(() => {
+        fallbackCopy();
+        resolve();
+      });
+    } else {
+      fallbackCopy();
+      resolve();
+    }
+    function fallbackCopy() {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+      document.body.removeChild(ta);
+    }
   });
 }
 
@@ -1553,7 +1567,10 @@ export default function App() {
                   <p>Your files have been securely uploaded to our print queue.</p>
                   <p>Save this tracking code to check your order status:</p>
                   
-                  <div className="tracking-code-display" onClick={() => { copyToClipboard(successModal); }} style={{ margin: "24px auto", maxWidth: 340, cursor: "pointer" }}>
+                  <div className="tracking-code-display" onClick={async () => { 
+                    await copyToClipboard(successModal); 
+                    addToast("Tracking code copied to clipboard!", "success");
+                  }} style={{ margin: "24px auto", maxWidth: 340, cursor: "pointer" }}>
                     <span className="code">{successModal}</span>
                     <span className="copy-hint">Tap to copy</span>
                   </div>
