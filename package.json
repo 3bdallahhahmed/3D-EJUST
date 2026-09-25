@@ -9,6 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "demo": "node elegoo-slicer-demo/serve.js",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
