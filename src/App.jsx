@@ -3,10 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Float, Html, useProgress } from "@react-three/drei";
 import * as THREE from "three";
-import STLViewer from "./slicer/STLViewer.jsx";
-import AdminSlicerModal from "./slicer/AdminSlicerModal.jsx";
-import MoonrakerDispatchModal from "./slicer/MoonrakerDispatchModal.jsx";
-import { generateElegooGcode } from "./slicer/slicerEngine.js";
 
 // ─────────────────────────────────────────────────────────
 // Supabase
@@ -28,37 +24,29 @@ function generateTrackingCode() {
   return code;
 }
 
-async function copyToClipboard(text) {
-  try {
-    if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
+function copyToClipboard(text) {
+  return new Promise((resolve) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(resolve).catch(() => {
+        fallbackCopy();
+        resolve();
+      });
+    } else {
+      fallbackCopy();
+      resolve();
     }
-  } catch (e) {
-    // continue to fallback
-  }
-
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.fontSize = "12pt";
-    ta.style.border = "0";
-    ta.style.padding = "0";
-    ta.style.margin = "0";
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.setAttribute("readonly", "");
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    ta.setSelectionRange(0, 99999);
-    const success = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return success;
-  } catch (err) {
-    console.error("Fallback copy failed:", err);
-    return false;
-  }
+    function fallbackCopy() {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+      document.body.removeChild(ta);
+    }
+  });
 }
 
 // ─────────────────────────────────────────────────────────
@@ -341,19 +329,38 @@ function StatusStepper({ status }) {
 // ═══════════════════════════════════════════════════════════
 function CopyableCode({ code }) {
   const [copied, setCopied] = useState(false);
-  async function handleCopy() {
-    const success = await copyToClipboard(code);
-    if (success !== false) {
+  function handleCopy() {
+    // Try modern API first, then fallback
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch(() => {
+        fallbackCopy(code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } else {
+      fallbackCopy(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2200);
+      setTimeout(() => setCopied(false), 2000);
     }
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
   }
   return (
     <div onClick={handleCopy} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
       <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.05em" }}>{code}</span>
-      <button type="button" className="copy-btn" onClick={(e) => { e.stopPropagation(); handleCopy(); }}>
-        {copied ? "Copied!" : "Tap to Copy"}
-      </button>
+      <button className="copy-btn" onClick={(e) => { e.stopPropagation(); handleCopy(); }}>{copied ? "✓ Copied!" : "Tap to Copy"}</button>
     </div>
   );
 }
@@ -492,66 +499,6 @@ export default function App() {
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [newGalleryItem, setNewGalleryItem] = useState({ title: "", description: "" });
   const [newGalleryFiles, setNewGalleryFiles] = useState([]);
-
-  // 3D Slicer, Estimation & Hardware Dispatch State
-  const [orderInfill, setOrderInfill] = useState(20);
-  const [clientMetrics, setClientMetrics] = useState(null);
-  const [copiedTrackingCode, setCopiedTrackingCode] = useState(false);
-  const [adminSlicerOrder, setAdminSlicerOrder] = useState(null);
-  const [moonrakerOrder, setMoonrakerOrder] = useState(null);
-  const [moonrakerGcode, setMoonrakerGcode] = useState("");
-  const [externalPrinterStates, setExternalPrinterStates] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("jp_external_printer_states") || "{}"); } catch { return {}; }
-  });
-  const [externalPromptPrinter, setExternalPromptPrinter] = useState(null);
-  const [externalJobInput, setExternalJobInput] = useState("");
-
-  function handleSetExternalJob(printer) {
-    setExternalPromptPrinter(printer);
-    setExternalJobInput("");
-  }
-
-  function handleSaveExternalJob() {
-    if (!externalPromptPrinter) return;
-    const updated = {
-      ...externalPrinterStates,
-      [externalPromptPrinter]: {
-        status: "working",
-        jobName: externalJobInput.trim() || "Flash Drive / Direct USB Print",
-        timestamp: new Date().toISOString()
-      }
-    };
-    setExternalPrinterStates(updated);
-    localStorage.setItem("jp_external_printer_states", JSON.stringify(updated));
-    setExternalPromptPrinter(null);
-    setExternalJobInput("");
-    addToast(`Marked ${externalPromptPrinter} as active (USB Job)`, "success");
-  }
-
-  function handleClearExternalJob(printer) {
-    const updated = { ...externalPrinterStates };
-    delete updated[printer];
-    setExternalPrinterStates(updated);
-    localStorage.setItem("jp_external_printer_states", JSON.stringify(updated));
-    addToast(`${printer} marked as ready`, "info");
-  }
-
-  function handleOpenMoonrakerForOrder(order, gcode = null) {
-    setMoonrakerOrder(order);
-    if (gcode) {
-      setMoonrakerGcode(gcode);
-    } else {
-      setMoonrakerGcode(`; Centauri Job: ${order.ordername || 'Order'}\n; Tracking: ${order.tracking_code}\nG28\nM104 S220\nM140 S60\n`);
-    }
-  }
-
-  async function handleMoonrakerDispatchSuccess(printerName) {
-    if (moonrakerOrder) {
-      await handleUpdateOrderStatus(moonrakerOrder.id, "printing", printerName);
-      addToast(`Order ${moonrakerOrder.tracking_code} sent to ${printerName}`, "success");
-    }
-    setMoonrakerOrder(null);
-  }
 
   const addToast = (msg, type = "info") => {
     const id = Date.now();
@@ -865,10 +812,6 @@ export default function App() {
       }
 
       const trackingCode = generateTrackingCode();
-      const weightGrams = clientMetrics ? clientMetrics.weightGrams : 0;
-      const calculatedTotal = clientMetrics ? clientMetrics.totalPrice : (weightGrams * (parseFloat(config.price_per_gram) || 3));
-      const formattedNotes = `[INFILL:${orderInfill}%] ${newOrder.notes || ""}`.trim();
-
       const payload = {
         name: newOrder.name,
         phone: newOrder.phone.replace(/[\s\-()]/g, ""),
@@ -876,14 +819,13 @@ export default function App() {
         ordername: newOrder.orderName,
         material: newOrder.material,
         color: newOrder.color,
-        notes: formattedNotes,
+        notes: newOrder.notes,
         fileurl: urls.join(","),
         filesize: totalSize,
         status: "queued",
         priority: queuedOrdersCount,
-        weightgrams: weightGrams,
+        weightgrams: 0,
         pricepergram: config.price_per_gram,
-        totalprice: calculatedTotal,
         tracking_code: trackingCode
       };
 
@@ -901,11 +843,8 @@ export default function App() {
       } catch (err) { console.error("Could not save tracking code", err); }
 
       setOrderStep(4);
-      setSuccessModal(trackingCode);
-      setCopiedTrackingCode(false);
+      setSuccessModal(trackingCode); // Keep this to pass the code to step 4 without modifying state structure too much
       setNewOrder({ name: newOrder.name, phone: newOrder.phone, email: newOrder.email, orderName: "", material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim(), notes: "", fileName: "" });
-      setClientMetrics(null);
-      setOrderInfill(20);
       setFormErrors({});
       setSelectedFiles([]);
       fetchOrders();
@@ -1094,60 +1033,25 @@ export default function App() {
               </div>
               {/* Printer Status Dashboard */}
               <div className="printer-dashboard card" style={{ marginBottom: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-                  <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22, color: "var(--accent)" }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    Printer Status & Telemetry
-                  </h3>
-                  <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>Tracks Website Orders & Direct USB Flash Drives</span>
-                </div>
+                <h3 style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22, color: "var(--accent)" }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Printer Status
+                </h3>
                 <div className="printer-status-grid">
                   {PRINTERS.map(printer => {
                     const activeOrder = orders.find(o => o.status === "printing" && getPrinterFromNotes(o.notes) === printer);
-                    const externalJob = externalPrinterStates[printer];
-                    const isWorking = Boolean(activeOrder || (externalJob && externalJob.status === "working"));
-                    const isExternal = !activeOrder && externalJob && externalJob.status === "working";
-
                     return (
-                      <div key={printer} className={`printer-status-card ${isWorking ? (isExternal ? 'external-working' : 'working') : 'resting'}`}>
+                      <div key={printer} className={`printer-status-card ${activeOrder ? 'working' : 'resting'}`}>
                         <div className="printer-status-indicator">
-                          <div className={`printer-dot ${isWorking ? (isExternal ? 'external' : 'active') : 'idle'}`} />
+                          <div className={`printer-dot ${activeOrder ? 'active' : 'idle'}`} />
                           <span className="printer-name">{printer}</span>
                         </div>
-                        <div className="printer-status-label">
-                          {activeOrder ? 'Working (Website Job)' : isExternal ? 'Working (Direct USB)' : 'Resting / Ready'}
-                        </div>
+                        <div className="printer-status-label">{activeOrder ? '⚙️ Working' : '✅ Resting'}</div>
                         {activeOrder && (
                           <div className="printer-current-order">
                             Printing: <strong>{activeOrder.ordername || "Untitled"}</strong> — {activeOrder.name}
                           </div>
                         )}
-                        {isExternal && (
-                          <div className="printer-current-order" style={{ color: "var(--accent)" }}>
-                            Direct Print: <strong>{externalJob.jobName || "Flash Drive Job"}</strong>
-                          </div>
-                        )}
-                        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          {isExternal ? (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-glass"
-                              style={{ padding: "4px 10px", fontSize: 11 }}
-                              onClick={() => handleClearExternalJob(printer)}
-                            >
-                              Clear USB Job
-                            </button>
-                          ) : !activeOrder ? (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-glass"
-                              style={{ padding: "4px 10px", fontSize: 11 }}
-                              onClick={() => handleSetExternalJob(printer)}
-                            >
-                              Log USB Print
-                            </button>
-                          ) : null}
-                        </div>
                       </div>
                     );
                   })}
@@ -1205,17 +1109,10 @@ export default function App() {
                             {o.ordername || "Untitled"}
                             <span style={{ fontSize: 10, background: o.status === "done" ? "var(--status-done)" : o.status === "printing" ? "var(--status-printing)" : "var(--status-queued)", color: "#fff", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700 }}>{o.status.toUpperCase()}</span>
                             {o.tracking_code && <span style={{ fontSize: 12, color: "var(--accent)", fontWeight: 700, fontFamily: "monospace" }}>{o.tracking_code}</span>}
-                            {o.status === "printing" && getPrinterFromNotes(o.notes) && <span style={{ fontSize: 10, background: "rgba(0,122,255,0.1)", color: "var(--status-printing)", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700, border: "1px solid rgba(0,122,255,0.2)" }}>[PRINTER: {getPrinterFromNotes(o.notes)}]</span>}
+                            {o.status === "printing" && getPrinterFromNotes(o.notes) && <span style={{ fontSize: 10, background: "rgba(0,122,255,0.1)", color: "var(--status-printing)", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700, border: "1px solid rgba(0,122,255,0.2)" }}>🖨️ {getPrinterFromNotes(o.notes)}</span>}
                           </div>
                           <div style={{ color: "var(--text-secondary)", marginTop: 6, fontSize: 13 }}>{o.name} &bull; {o.phone}{o.email ? ` &bull; ${o.email}` : ""}</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span>{o.material} ({o.color})</span>
-                            {o.notes && o.notes.includes("[INFILL:") && (
-                              <span style={{ fontSize: 11, background: "rgba(255, 128, 0, 0.12)", color: "var(--accent)", padding: "2px 8px", borderRadius: "var(--radius-full)", fontWeight: 700 }}>
-                                {o.notes.match(/\[INFILL:([^\]]+)\]/)?.[1] || ""} Infill
-                              </span>
-                            )}
-                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{o.material} ({o.color})</div>
                           {getCleanNotes(o.notes) && <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4, fontStyle: "italic" }}>Notes: {getCleanNotes(o.notes)}</div>}
                           <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 6 }}>
                             {o.createdat && <span>{new Date(o.createdat).toLocaleString()} &bull; </span>}
@@ -1242,26 +1139,8 @@ export default function App() {
                               {PRINTERS.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                           )}
-                          {Boolean(o.fileurl && o.fileurl.toLowerCase().includes('.stl')) && (
-                            <button
-                              type="button"
-                              onClick={() => setAdminSlicerOrder(o)}
-                              className="btn btn-accent"
-                              style={{ padding: "8px 16px", fontSize: 12 }}
-                            >
-                              Inspect & Slice 3D
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenMoonrakerForOrder(o)}
-                            className="btn btn-glass"
-                            style={{ padding: "8px 16px", fontSize: 12 }}
-                          >
-                            Send to Printer
-                          </button>
                           {o.fileurl && o.fileurl.split(',').map((url, idx, arr) => (
-                            <a key={idx} href={url} download target="_blank" rel="noreferrer" className="btn btn-glass" style={{ padding: "8px 16px", fontSize: 12 }}>
+                            <a key={idx} href={url} download target="_blank" rel="noreferrer" className="btn btn-accent" style={{ padding: "8px 16px", fontSize: 12 }}>
                               Download {arr.length > 1 ? idx + 1 : ""}
                             </a>
                           ))}
@@ -1464,59 +1343,6 @@ export default function App() {
               </div>
             </div>
           )}
-
-          {/* Admin 3D Slicer Modal */}
-          <AdminSlicerModal
-            isOpen={Boolean(adminSlicerOrder)}
-            onClose={() => setAdminSlicerOrder(null)}
-            order={adminSlicerOrder}
-            pricePerGram={config.price_per_gram}
-            onUpdateWeightPrice={(id, weight) => {
-              handleUpdateWeight(id, weight);
-              addToast(`Updated order weight to ${weight}g`, "success");
-              setAdminSlicerOrder(null);
-            }}
-            onOpenMoonraker={(order, gcode) => {
-              setAdminSlicerOrder(null);
-              handleOpenMoonrakerForOrder(order, gcode);
-            }}
-          />
-
-          {/* Moonraker Hardware Dispatch Modal */}
-          <MoonrakerDispatchModal
-            isOpen={Boolean(moonrakerOrder)}
-            onClose={() => setMoonrakerOrder(null)}
-            order={moonrakerOrder}
-            gcodeString={moonrakerGcode}
-            fileName={moonrakerOrder ? (moonrakerOrder.ordername || 'job') : 'model'}
-            onDispatchSuccess={handleMoonrakerDispatchSuccess}
-          />
-
-          {/* External USB Print Prompt Modal */}
-          {externalPromptPrinter && (
-            <div className="modal-overlay" style={{ zIndex: 10000 }} onClick={() => setExternalPromptPrinter(null)}>
-              <div className="modal-content" style={{ maxWidth: 440, width: "100%", padding: 28, textAlign: "left" }} onClick={e => e.stopPropagation()}>
-                <h3 style={{ margin: "0 0 12px 0", fontSize: 18, fontWeight: 800 }}>Log Direct USB Print for {externalPromptPrinter}</h3>
-                <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
-                  Track hardware usage when running a print directly from a USB flash drive or physical touchscreen.
-                </p>
-                <div style={{ marginBottom: 20 }}>
-                  <label>Job or Part Description</label>
-                  <input
-                    value={externalJobInput}
-                    onChange={e => setExternalJobInput(e.target.value)}
-                    placeholder="e.g. Flash Drive: Mechanical Gear"
-                    autoFocus
-                    onKeyDown={e => e.key === "Enter" && handleSaveExternalJob()}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                  <button type="button" className="btn btn-glass" onClick={() => setExternalPromptPrinter(null)}>Cancel</button>
-                  <button type="button" className="btn btn-accent" onClick={handleSaveExternalJob}>Mark as Working</button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1678,23 +1504,12 @@ export default function App() {
                       </select>
                     </div>
                   </div>
-                  <div className="form-row">
-                    <div style={{ gridColumn: "1 / -1" }}>
-                      <label>Infill Density</label>
-                      <select value={orderInfill} onChange={e => setOrderInfill(parseInt(e.target.value, 10))}>
-                        <option value={20}>Standard (20%) - Recommended for Most Parts</option>
-                        <option value={50}>High Strength (50%) - Functional & Heavy Duty</option>
-                        <option value={15}>Light / Draft (15%) - Rapid Prototyping</option>
-                        <option value={100}>Solid (100%) - Maximum Structural Density</option>
-                      </select>
-                    </div>
-                  </div>
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <label>Notes / Special Instructions</label>
                       <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600 }}>{newOrder.notes.length}/500</span>
                     </div>
-                    <textarea value={newOrder.notes} maxLength={500} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Orientation, special tolerances, requests..." rows="3" />
+                    <textarea value={newOrder.notes} maxLength={500} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Infill %, orientation, special requests..." rows="3" />
                   </div>
                   <div style={{ marginBottom: 24 }}>
                     <label>STL or ZIP File(s) *</label>
@@ -1711,55 +1526,6 @@ export default function App() {
                     {fileError && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{fileError}</div>}
                     {formErrors.file && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{formErrors.file}</div>}
                   </div>
-
-                  {/* 3D STL Object Preview & Slicer Estimation */}
-                  {Boolean(selectedFiles.find(f => f.name.toLowerCase().endsWith(".stl"))) && (
-                    <div style={{ marginBottom: 24 }}>
-                      <label>3D Model & Build Plate Preview</label>
-                      <STLViewer
-                        file={selectedFiles.find(f => f.name.toLowerCase().endsWith(".stl"))}
-                        infillPercent={orderInfill}
-                        materialKey={newOrder.material || "pla"}
-                        pricePerGram={config.price_per_gram}
-                        onMetricsChange={setClientMetrics}
-                        height="260px"
-                      />
-
-                      {clientMetrics && (
-                        <div className="print-estimate-card">
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                            <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--accent)" }}>
-                              Client Print Estimate
-                            </span>
-                            <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: "var(--radius-full)", background: clientMetrics.fitsBed ? "rgba(52, 199, 89, 0.15)" : "rgba(255, 59, 48, 0.15)", color: clientMetrics.fitsBed ? "var(--status-done)" : "#FF3B30", fontWeight: 700, border: `1px solid ${clientMetrics.fitsBed ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}` }}>
-                              {clientMetrics.fitsBed ? "Fits Centauri Bed (256x256mm)" : "Exceeds Bed Envelope"}
-                            </span>
-                          </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12 }}>
-                            <div>
-                              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Weight</div>
-                              <div style={{ fontSize: 16, fontWeight: 800 }}>{clientMetrics.weightGrams} g</div>
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Time</div>
-                              <div style={{ fontSize: 16, fontWeight: 800 }}>{clientMetrics.printTimeFormatted}</div>
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Price</div>
-                              <div style={{ fontSize: 18, fontWeight: 900, color: "var(--accent)" }}>{clientMetrics.totalPrice.toFixed(2)} EGP</div>
-                            </div>
-                            {clientMetrics.metrics && (
-                              <div>
-                                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Dimensions</div>
-                                <div style={{ fontSize: 12, fontWeight: 700 }}>{clientMetrics.metrics.width} x {clientMetrics.metrics.depth} x {clientMetrics.metrics.height} mm</div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
                     <button className="btn btn-glass" onClick={() => setOrderStep(1)}>← Back</button>
                     <button className="btn btn-accent" onClick={() => {
@@ -1781,17 +1547,7 @@ export default function App() {
                     <div><strong>Email:</strong> {newOrder.email}</div>
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-glass)' }}><strong>Project:</strong> {newOrder.orderName || "Untitled"}</div>
                     <div><strong>Material:</strong> {newOrder.material} ({newOrder.color})</div>
-                    <div><strong>Infill Density:</strong> {orderInfill}% {orderInfill === 20 ? "(Standard)" : orderInfill === 50 ? "(High Strength)" : orderInfill === 100 ? "(Solid)" : "(Draft)"}</div>
                     <div><strong>Files:</strong> {newOrder.fileName}</div>
-
-                    {clientMetrics && (
-                      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--border-glass)' }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                          <span><strong>Est. Weight:</strong> ~{clientMetrics.weightGrams} g &bull; <strong>Time:</strong> ~{clientMetrics.printTimeFormatted}</span>
-                          <span style={{ fontSize: 18, fontWeight: 900, color: "var(--accent)" }}>{clientMetrics.totalPrice.toFixed(2)} EGP</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
                     <button className="btn btn-glass" onClick={() => setOrderStep(2)}>← Back</button>
@@ -1811,20 +1567,12 @@ export default function App() {
                   <p>Your files have been securely uploaded to our print queue.</p>
                   <p>Save this tracking code to check your order status:</p>
                   
-                  <div 
-                    className={`tracking-code-display ${copiedTrackingCode ? 'copied' : ''}`} 
-                    onClick={async () => { 
-                      const success = await copyToClipboard(successModal); 
-                      if (success !== false) {
-                        setCopiedTrackingCode(true);
-                        addToast("Tracking code copied to clipboard!", "success");
-                        setTimeout(() => setCopiedTrackingCode(false), 3000);
-                      }
-                    }} 
-                    style={{ margin: "24px auto", maxWidth: 340, cursor: "pointer" }}
-                  >
+                  <div className="tracking-code-display" onClick={async () => { 
+                    await copyToClipboard(successModal); 
+                    addToast("Tracking code copied to clipboard!", "success");
+                  }} style={{ margin: "24px auto", maxWidth: 340, cursor: "pointer" }}>
                     <span className="code">{successModal}</span>
-                    <span className="copy-hint">{copiedTrackingCode ? "Copied to clipboard!" : "Tap to copy"}</span>
+                    <span className="copy-hint">Tap to copy</span>
                   </div>
                   
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
