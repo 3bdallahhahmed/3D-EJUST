@@ -20,6 +20,7 @@ export default function AdminSlicerModal({
   const [speed, setSpeed] = useState(300);
   const [metrics, setMetrics] = useState(null);
   const [hasSliced, setHasSliced] = useState(false);
+  const [customPrice, setCustomPrice] = useState('');
 
   if (!isOpen || !order) return null;
 
@@ -48,9 +49,14 @@ export default function AdminSlicerModal({
     URL.revokeObjectURL(url);
   }
 
+  const weight = metrics ? (metrics.filamentWeightGrams || metrics.weightGrams || 0) : (order.weightgrams || 0);
+  const time = metrics ? (metrics.printTimeFormatted || 'Calculating...') : '--';
+  const autoPrice = metrics ? (metrics.totalPrice || (weight * pricePerGram)) : ((order.weightgrams || 0) * pricePerGram);
+  const displayPrice = customPrice !== '' ? parseFloat(customPrice) || 0 : autoPrice;
+
   function handleApplyToOrder() {
-    if (!metrics || !onUpdateWeightPrice) return;
-    onUpdateWeightPrice(order.id, metrics.filamentWeightGrams || metrics.weightGrams);
+    if (!onUpdateWeightPrice) return;
+    onUpdateWeightPrice(order.id, weight, displayPrice);
   }
 
   function handleTriggerMoonraker() {
@@ -61,19 +67,15 @@ export default function AdminSlicerModal({
     }
   }
 
-  const weight = metrics ? (metrics.filamentWeightGrams || metrics.weightGrams || 0) : (order.weightgrams || 0);
-  const time = metrics ? (metrics.printTimeFormatted || 'Calculating...') : '--';
-  const price = metrics ? (metrics.totalPrice || (weight * pricePerGram)) : ((order.weightgrams || 0) * pricePerGram);
-
   return (
-    <div className="modal-overlay" style={{ zIndex: 9999, padding: 16 }} onClick={onClose}>
+    <div className="modal-overlay" style={{ zIndex: 9999, padding: 12 }} onClick={onClose}>
       <div
         className="modal-content"
-        style={{ maxWidth: 960, width: '100%', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0, textAlign: 'left', borderRadius: 'var(--radius-md)' }}
+        style={{ maxWidth: 1140, width: '96%', height: '88vh', maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0, textAlign: 'left', borderRadius: 'var(--radius-md)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20, 25, 35, 0.85)' }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20, 25, 35, 0.9)', flexShrink: 0 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 800 }}>Elegoo Centauri Slicer Studio</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -92,8 +94,8 @@ export default function AdminSlicerModal({
 
         {/* Body Split */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexWrap: 'wrap' }}>
-          {/* Left: 3D Viewport */}
-          <div style={{ flex: '1 1 500px', minHeight: 380, position: 'relative', background: '#0a0c10' }}>
+          {/* Left: Prominent 3D Viewport */}
+          <div style={{ flex: '1 1 620px', minHeight: 460, height: '100%', position: 'relative', background: '#0a0c10' }}>
             <STLViewer
               ref={viewerRef}
               fileUrl={stlUrl}
@@ -108,7 +110,7 @@ export default function AdminSlicerModal({
           </div>
 
           {/* Right: Slicer Controls & Metrics */}
-          <div style={{ flex: '1 1 340px', padding: 20, overflowY: 'auto', background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ flex: '1 1 360px', padding: 22, overflowY: 'auto', background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Parameters */}
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', marginBottom: 12 }}>
@@ -119,9 +121,9 @@ export default function AdminSlicerModal({
                 <div>
                   <label>Layer Height</label>
                   <select value={layerHeight} onChange={(e) => setLayerHeight(parseFloat(e.target.value))}>
-                    <option value={0.12}>0.12 mm (Fine)</option>
+                    <option value={0.12}>0.12 mm (Fine Quality)</option>
                     <option value={0.20}>0.20 mm (Standard)</option>
-                    <option value={0.28}>0.28 mm (Draft)</option>
+                    <option value={0.28}>0.28 mm (Draft / Rapid)</option>
                   </select>
                 </div>
                 <div>
@@ -141,16 +143,16 @@ export default function AdminSlicerModal({
                   <select value={speed} onChange={(e) => setSpeed(parseInt(e.target.value, 10))}>
                     <option value={300}>High Speed (300 mm/s) - CoreXY</option>
                     <option value={180}>Balanced (180 mm/s)</option>
-                    <option value={80}>Silent Precision (80 mm/s)</option>
+                    <option value={100}>Precision Surface (100 mm/s)</option>
                   </select>
                 </div>
               </div>
             </div>
 
             {/* Slicing Metrics Card */}
-            <div style={{ padding: 16, background: 'rgba(0, 0, 0, 0.25)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)' }}>
+            <div style={{ padding: 16, background: 'rgba(0, 0, 0, 0.3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)' }}>
               <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', marginBottom: 12 }}>
-                Calculated Print Metrics
+                Calculated Print Metrics (1:1 Slicer)
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -168,8 +170,32 @@ export default function AdminSlicerModal({
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Calculated Price</div>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--accent)' }}>{Number(price).toFixed(2)} EGP</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{Number(autoPrice).toFixed(2)} EGP</div>
                 </div>
+              </div>
+
+              {/* Editable Price Field */}
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-glass)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ margin: 0, fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>Custom / Override Price (EGP)</label>
+                  {customPrice !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomPrice('')}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Reset to Auto
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={customPrice !== '' ? customPrice : Number(autoPrice).toFixed(2)}
+                  onChange={(e) => setCustomPrice(e.target.value)}
+                  style={{ width: '100%', marginTop: 6, padding: '8px 12px', fontSize: 15, fontWeight: 800, color: 'var(--accent)' }}
+                  placeholder="Enter custom price"
+                />
               </div>
 
               {metrics && metrics.metrics && (
@@ -214,9 +240,9 @@ export default function AdminSlicerModal({
                 type="button"
                 className="btn btn-glass"
                 onClick={handleApplyToOrder}
-                style={{ fontSize: 12, padding: '8px 12px', marginTop: 4 }}
+                style={{ fontSize: 12, padding: '9px 12px', marginTop: 4, fontWeight: 700 }}
               >
-                Apply Weight ({weight}g) to Order
+                Apply Weight ({weight}g) & Price ({displayPrice.toFixed(2)} EGP) to Order
               </button>
             </div>
           </div>

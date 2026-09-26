@@ -968,11 +968,21 @@ export default function App() {
     });
   }
 
-  async function handleUpdateWeight(id, weightStr) {
+  async function handleUpdateWeight(id, weightStr, customPrice = null) {
     const weight = parseFloat(weightStr) || 0;
-    const price = weight * (parseFloat(config.price_per_gram) || 0);
+    const price = customPrice !== null && customPrice !== undefined && !isNaN(customPrice)
+      ? parseFloat(customPrice)
+      : weight * (parseFloat(config.price_per_gram) || 0);
     await supabase.from("orders").update({ weightgrams: weight, pricepergram: config.price_per_gram, totalprice: price }).eq("id", id);
     fetchOrders();
+  }
+
+  async function handleUpdatePrice(id, priceStr) {
+    const price = parseFloat(priceStr);
+    if (isNaN(price)) return;
+    await supabase.from("orders").update({ totalprice: Math.max(0, price) }).eq("id", id);
+    fetchOrders();
+    addToast(`Updated order price to ${price.toFixed(2)} EGP`, "success");
   }
 
   function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
@@ -982,7 +992,8 @@ export default function App() {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "ID,Name,Email,Phone,Order Name,Status,Material,Color,Weight,Total Price,Tracking Code,Created At\n"
       + getSortedOrders().map(o => {
-          return `"${o.id}","${o.name || ''}","${o.email || ''}","${o.phone || ''}","${o.ordername || ''}","${o.status}","${o.material || ''}","${o.color || ''}",${o.weightgrams || 0},${(o.weightgrams || 0) * (config.price_per_gram || 0)},"${o.tracking_code || ''}","${o.createdat}"`;
+          const finalP = o.totalprice !== null && o.totalprice !== undefined ? o.totalprice : ((o.weightgrams || 0) * (config.price_per_gram || 0));
+          return `"${o.id}","${o.name || ''}","${o.email || ''}","${o.phone || ''}","${o.ordername || ''}","${o.status}","${o.material || ''}","${o.color || ''}",${o.weightgrams || 0},${finalP},"${o.tracking_code || ''}","${o.createdat}"`;
         }).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -1269,13 +1280,36 @@ export default function App() {
                           <button onClick={() => handleDeleteOrder(o.id)} style={{ padding: "8px 16px", background: "#FF3B30", color: "#fff", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Delete</button>
                         </div>
                       </div>
-                      <div className="admin-order-footer">
+                      <div className="admin-order-footer" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <label style={{ margin: 0, whiteSpace: "nowrap" }}>Weight (g)</label>
-                          <input type="number" defaultValue={o.weightgrams || ""} placeholder="0" onBlur={(e) => handleUpdateWeight(o.id, e.target.value)} style={{ width: 90, padding: "8px 12px", fontSize: 13 }} />
+                          <label style={{ margin: 0, whiteSpace: "nowrap", fontSize: 12 }}>Weight (g)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            key={`w_${o.id}_${o.weightgrams}`}
+                            defaultValue={o.weightgrams || ""}
+                            placeholder="0"
+                            onBlur={(e) => handleUpdateWeight(o.id, e.target.value)}
+                            style={{ width: 85, padding: "6px 10px", fontSize: 13 }}
+                          />
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Rate: <strong style={{ color: "var(--text-primary)" }}>{config.price_per_gram} EGP/g</strong></div>
-                        <div style={{ fontSize: 16, fontWeight: 900, color: "var(--accent)", marginLeft: "auto" }}>{calculatedPrice.toFixed(2)} EGP</div>
+                        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                          Rate: <strong style={{ color: "var(--text-primary)" }}>{config.price_per_gram} EGP/g</strong>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+                          <label style={{ margin: 0, whiteSpace: "nowrap", fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>Price (EGP)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            key={`p_${o.id}_${o.totalprice}`}
+                            defaultValue={o.totalprice !== null && o.totalprice !== undefined ? Number(o.totalprice).toFixed(2) : calculatedPrice.toFixed(2)}
+                            placeholder="0.00"
+                            onBlur={(e) => handleUpdatePrice(o.id, e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleUpdatePrice(o.id, e.target.value)}
+                            style={{ width: 110, padding: "6px 10px", fontSize: 14, fontWeight: 900, color: "var(--accent)", textAlign: "right" }}
+                            title="Click to edit final order price"
+                          />
+                        </div>
                       </div>
                     </div>
                     </div>
@@ -1394,6 +1428,32 @@ export default function App() {
                   <div style={{ flex: 1 }}><label>Material</label><input value={editingOrder.material || ""} onChange={e => setEditingOrder({...editingOrder, material: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
                   <div style={{ flex: 1 }}><label>Color</label><input value={editingOrder.color || ""} onChange={e => setEditingOrder({...editingOrder, color: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
                 </div>
+                <div className="form-row">
+                  <div style={{ flex: 1 }}>
+                    <label>Weight (grams)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editingOrder.weightgrams ?? ""}
+                      onChange={e => {
+                        const w = parseFloat(e.target.value) || 0;
+                        const autoP = w * (parseFloat(config.price_per_gram) || 0);
+                        setEditingOrder({ ...editingOrder, weightgrams: w, totalprice: autoP });
+                      }}
+                      style={{ width: '100%', marginBottom: 16 }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label>Total Price (EGP)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={editingOrder.totalprice ?? ""}
+                      onChange={e => setEditingOrder({ ...editingOrder, totalprice: parseFloat(e.target.value) || 0 })}
+                      style={{ width: '100%', marginBottom: 16, fontWeight: 700, color: 'var(--accent)' }}
+                    />
+                  </div>
+                </div>
                 <div>
                   <label>Notes</label>
                   <textarea rows="3" value={getCleanNotes(editingOrder.notes)} onChange={e => setEditingOrder({...editingOrder, notes: setPrinterInNotes(e.target.value, getPrinterFromNotes(editingOrder.notes))})} style={{ width: '100%', marginBottom: 16 }} />
@@ -1471,9 +1531,9 @@ export default function App() {
             onClose={() => setAdminSlicerOrder(null)}
             order={adminSlicerOrder}
             pricePerGram={config.price_per_gram}
-            onUpdateWeightPrice={(id, weight) => {
-              handleUpdateWeight(id, weight);
-              addToast(`Updated order weight to ${weight}g`, "success");
+            onUpdateWeightPrice={(id, weight, price) => {
+              handleUpdateWeight(id, weight, price);
+              addToast(`Updated order to ${weight}g & ${Number(price).toFixed(2)} EGP`, "success");
               setAdminSlicerOrder(null);
             }}
             onOpenMoonraker={(order, gcode) => {
@@ -1563,7 +1623,7 @@ export default function App() {
         <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
+          <button className="theme-toggle mobile-theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
             {darkMode ? <SunIcon /> : <MoonIcon />}
           </button>
           
@@ -1575,6 +1635,9 @@ export default function App() {
         </div>
 
         <div className={`nav-links ${mobileMenuOpen ? "nav-open" : ""}`}>
+          <button className="theme-toggle desktop-theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" title="Toggle Light/Dark Theme">
+            {darkMode ? <SunIcon /> : <MoonIcon />}
+          </button>
           <a href="#why" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
           <a href="#full-gallery" onClick={() => setMobileMenuOpen(false)}>Gallery</a>
           <a href="#order" onClick={() => setMobileMenuOpen(false)}>Order</a>
@@ -1738,7 +1801,7 @@ export default function App() {
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12 }}>
                             <div>
                               <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Weight</div>
-                              <div style={{ fontSize: 16, fontWeight: 800 }}>{clientMetrics.weightGrams} g</div>
+                              <div style={{ fontSize: 16, fontWeight: 800 }}>{(clientMetrics.weightGrams ?? clientMetrics.filamentWeightGrams ?? 0)} g</div>
                             </div>
                             <div>
                               <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Time</div>
@@ -1761,13 +1824,13 @@ export default function App() {
                   )}
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                    <button className="btn btn-glass" onClick={() => setOrderStep(1)}>← Back</button>
+                    <button className="btn btn-glass" onClick={() => setOrderStep(1)}>Back</button>
                     <button className="btn btn-accent" onClick={() => {
                       const errors = {};
                       if (selectedFiles.length === 0) errors.file = "Please upload at least one STL or ZIP file.";
                       setFormErrors(errors);
                       if (Object.keys(errors).length === 0) setOrderStep(3);
-                    }}>Review Order →</button>
+                    }}>Review Order</button>
                   </div>
                 </div>
               )}
@@ -1775,26 +1838,67 @@ export default function App() {
               {orderStep === 3 && (
                 <div className="animate-in">
                   <h3 style={{ marginBottom: 16 }}>Order Summary</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24, padding: 20, background: 'rgba(255,255,255,0.4)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)' }}>
-                    <div><strong>Name:</strong> {newOrder.name}</div>
-                    <div><strong>Phone:</strong> {newOrder.phone}</div>
-                    <div><strong>Email:</strong> {newOrder.email}</div>
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-glass)' }}><strong>Project:</strong> {newOrder.orderName || "Untitled"}</div>
-                    <div><strong>Material:</strong> {newOrder.material} ({newOrder.color})</div>
-                    <div><strong>Infill Density:</strong> {orderInfill}% {orderInfill === 20 ? "(Standard)" : orderInfill === 50 ? "(High Strength)" : orderInfill === 100 ? "(Solid)" : "(Draft)"}</div>
-                    <div><strong>Files:</strong> {newOrder.fileName}</div>
+                  <div className="review-summary-card">
+                    <div className="review-item">
+                      <span className="review-item-label">Client Name</span>
+                      <span className="review-item-value">{newOrder.name}</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Phone</span>
+                      <span className="review-item-value">{newOrder.phone}</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Email</span>
+                      <span className="review-item-value">{newOrder.email}</span>
+                    </div>
+                    <div style={{ margin: "6px 0", borderTop: "1px solid var(--border-glass)" }}></div>
+                    <div className="review-item">
+                      <span className="review-item-label">Project</span>
+                      <span className="review-item-value">{newOrder.orderName || "Untitled"}</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Material & Color</span>
+                      <span className="review-item-value">{newOrder.material?.toUpperCase()} ({newOrder.color})</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Infill Density</span>
+                      <span className="review-item-value">
+                        {orderInfill}% {orderInfill === 20 ? "(Standard)" : orderInfill === 50 ? "(High Strength)" : orderInfill === 100 ? "(Solid)" : "(Draft)"}
+                      </span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">File Name</span>
+                      <span className="review-item-value" style={{ wordBreak: "break-all" }}>{newOrder.fileName}</span>
+                    </div>
 
                     {clientMetrics && (
-                      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--border-glass)' }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                          <span><strong>Est. Weight:</strong> ~{clientMetrics.weightGrams} g &bull; <strong>Time:</strong> ~{clientMetrics.printTimeFormatted}</span>
-                          <span style={{ fontSize: 18, fontWeight: 900, color: "var(--accent)" }}>{clientMetrics.totalPrice.toFixed(2)} EGP</span>
+                      <>
+                        <div style={{ margin: "6px 0", borderTop: "1px solid var(--border-glass)" }}></div>
+                        <div className="review-item">
+                          <span className="review-item-label">Est. Weight & Time</span>
+                          <span className="review-item-value">
+                            ~{(clientMetrics.weightGrams ?? clientMetrics.filamentWeightGrams ?? 0)} g &bull; ~{clientMetrics.printTimeFormatted}
+                          </span>
                         </div>
-                      </div>
+                        {clientMetrics.metrics && (
+                          <div className="review-item">
+                            <span className="review-item-label">Dimensions</span>
+                            <span className="review-item-value">
+                              {clientMetrics.metrics.width} x {clientMetrics.metrics.depth} x {clientMetrics.metrics.height} mm
+                            </span>
+                          </div>
+                        )}
+                        <div className="review-item" style={{ marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--border-glass)" }}>
+                          <span className="review-item-label" style={{ fontSize: 15, fontWeight: 700 }}>Est. Total</span>
+                          <span style={{ fontSize: 20, fontWeight: 900, color: "var(--accent)" }}>
+                            {clientMetrics.totalPrice.toFixed(2)} EGP
+                          </span>
+                        </div>
+                      </>
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                    <button className="btn btn-glass" onClick={() => setOrderStep(2)}>← Back</button>
+                    <button className="btn btn-glass" onClick={() => setOrderStep(2)}>Back</button>
                     <button className="btn btn-primary" style={{ opacity: isUploading ? 0.7 : 1 }} disabled={isUploading} onClick={handleOrderSubmit}>
                       {isUploading ? "Uploading..." : "Submit Order"}
                     </button>

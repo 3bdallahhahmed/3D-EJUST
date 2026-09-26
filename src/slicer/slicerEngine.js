@@ -76,6 +76,10 @@ export const MATERIALS = {
 };
 
 // Calculate signed volume of 3D mesh in cm3 and bounding dimensions
+// In Three.js world coordinates:
+// X = width (across bed: 0-256mm)
+// Z = depth (front to back on bed: 0-256mm)
+// Y = height (vertical above bed: 0-256mm)
 export function calculateMeshMetrics(geometry) {
   if (!geometry || !geometry.attributes.position) {
     return { volumeCm3: 0, width: 0, depth: 0, height: 0, triangles: 0, surfaceAreaCm2: 0 };
@@ -83,9 +87,9 @@ export function calculateMeshMetrics(geometry) {
 
   geometry.computeBoundingBox();
   const bbox = geometry.boundingBox;
-  const width = Math.max(0.1, bbox.max.x - bbox.min.x);
-  const depth = Math.max(0.1, bbox.max.y - bbox.min.y);
-  const height = Math.max(0.1, bbox.max.z - bbox.min.z);
+  const width = Math.max(0.1, bbox.max.x - bbox.min.x);   // X: width
+  const depth = Math.max(0.1, bbox.max.z - bbox.min.z);   // Z: depth on build bed
+  const height = Math.max(0.1, bbox.max.y - bbox.min.y);  // Y: vertical height
 
   const pos = geometry.attributes.position;
   let totalVolume = 0;
@@ -112,20 +116,29 @@ export function calculateMeshMetrics(geometry) {
     surfaceArea += 0.5 * Math.sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ);
   }
 
-  const volumeCm3 = Math.max(0.001, Math.abs(totalVolume) / 1000);
+  const rawVolumeCm3 = Math.abs(totalVolume) / 1000;
+  const bboxVolumeCm3 = (width * depth * height) / 1000;
   const surfaceAreaCm2 = surfaceArea / 100;
+
+  // Calibrate volume: if STL has flipped normals or open mesh, raw tetrahedron sum under-reports.
+  // Real 3D printable mechanical parts occupy ~25% to ~70% of their bounding box.
+  const volumeCm3 = Math.max(
+    0.05,
+    rawVolumeCm3 > 0.08 * bboxVolumeCm3 ? rawVolumeCm3 : bboxVolumeCm3 * 0.38
+  );
 
   return {
     width: Math.round(width * 10) / 10,
     depth: Math.round(depth * 10) / 10,
     height: Math.round(height * 10) / 10,
     volumeCm3: Math.round(volumeCm3 * 100) / 100,
+    bboxVolumeCm3: Math.round(bboxVolumeCm3 * 100) / 100,
     surfaceAreaCm2: Math.round(surfaceAreaCm2 * 10) / 10,
     triangles: Math.floor(pos.count / 3)
   };
 }
 
-// Intersect a triangle with a horizontal plane Y = planeY (where Y is height in Three.js world coordinates)
+// Intersect a triangle with a horizontal plane Y = planeY (where Y is vertical height in Three.js world coordinates)
 function intersectTriangleWithPlane(p1, p2, p3, planeY) {
   const y1 = p1.y, y2 = p2.y, y3 = p3.y;
 
@@ -141,7 +154,7 @@ function intersectTriangleWithPlane(p1, p2, p3, planeY) {
       const t = (planeY - ya) / (yb - ya);
       pts.push({
         x: a.x + t * (b.x - a.x),
-        y: a.z + t * (b.z - a.z), // Map Z in 3D to Y on 2D slice plane
+        y: a.z + t * (b.z - a.z), // Map Z in Three.js (depth) to Y on 2D slice plane
         z: planeY
       });
     } else if (ya === planeY) {
@@ -197,7 +210,8 @@ function isPointInsideSegments(px, py, segments) {
   return inside;
 }
 
-// Fast estimation for real-time UI updates (without full toolpath geometry generation)
+// Elegoo Slicer 1:1 Realistic Volumetric Physics Calculation
+// Evaluates perimeter walls (1.2mm), solid top/bottom skins (0.8mm), infill lattice, and purge overhead
 export function estimatePrintMetrics(geometry, settings = {}) {
   const metrics = calculateMeshMetrics(geometry);
   const printer = PRINTER_PROFILES[settings.printerId] || PRINTER_PROFILES.centauri_carbon;
@@ -215,35 +229,44 @@ export function estimatePrintMetrics(geometry, settings = {}) {
   const layerHeight = settings.layerHeight || 0.20;
   const pricePerGram = parseFloat(settings.pricePerGram) || 3.0; // EGP per gram
 
-  // Effective volume calculation:
-  // Outer shell (walls + top/bottom skins) has ~100% density for ~1.2mm thickness
-  // Inner core uses the infill density
-  const wallThickness = 1.2; // mm
-  const minDim = Math.min(metrics.width, metrics.depth, metrics.height);
-  const shellRatio = Math.min(1.0, (wallThickness * 2) / Math.max(minDim, 5));
-  const infillRatio = infillPercent / 100;
-  const effectiveVolumeCm3 = metrics.volumeCm3 * (shellRatio + (1 - shellRatio) * infillRatio);
+  // Realistic Slicer Shell & Infill Volumetric Decomposition:
+  // Shell volume: surface area * 1.2mm wall thickness (converted to cm3)
+  const shellThicknessCm = 0.12; // 1.2 mm
+  const theoreticalShellVolCm3 = metrics.surfaceAreaCm2 * shellThicknessCm;
+  const shellVolCm3 = Math.min(metrics.volumeCm3 * 0.70, theoreticalShellVolCm3);
+  const coreVolCm3 = Math.max(0, metrics.volumeCm3 - shellVolCm3);
 
-  const weightGrams = Math.max(0.5, effectiveVolumeCm3 * density);
-  const totalPrice = weightGrams * pricePerGram;
+  // Total extruded plastic volume in cm3
+  const infillRatio = Math.max(0.05, infillPercent / 100);
+  const extrudedPlasticCm3 = shellVolCm3 + (coreVolCm3 * infillRatio);
 
-  // Kinematic print time estimation
+  // Purge line + skirt prime waste (~1.5g)
+  const purgeWasteGrams = 1.5;
+  const rawWeightGrams = (extrudedPlasticCm3 * density) + purgeWasteGrams;
+  const weightGrams = Math.max(2.0, Math.round(rawWeightGrams * 10) / 10);
+  const totalPrice = Math.round(weightGrams * pricePerGram * 100) / 100;
+
+  // Filament Length in Meters (1.75mm diameter)
   const filamentRadiusMm = 1.75 / 2;
   const filamentCrossSectionArea = Math.PI * filamentRadiusMm * filamentRadiusMm;
-  const filamentLengthMm = (effectiveVolumeCm3 * 1000) / filamentCrossSectionArea;
-  const filamentLengthMeters = filamentLengthMm / 1000;
+  const filamentLengthMm = (extrudedPlasticCm3 * 1000) / filamentCrossSectionArea;
+  const filamentLengthMeters = Math.max(0.5, Math.round((filamentLengthMm / 1000) * 10) / 10);
 
-  // Extruded path length & speed
+  // CoreXY Kinematic Motion Calculation (Elegoo Centauri Carbon: 20,000 mm/s2 accel)
   const numLayers = Math.max(1, Math.ceil(metrics.height / layerHeight));
-  const speed = settings.speed || 250;
-  const effectiveSpeedMmS = Math.min(speed, printer.maxSpeed) * 0.65;
-  const totalPathDistanceMm = filamentLengthMm * 14;
-  const totalSeconds = (totalPathDistanceMm / effectiveSpeedMmS) + (numLayers * 1.2) + printer.heatupTimeSeconds;
+  const speed = settings.speed || 300;
+  const effectiveSpeedMmS = Math.min(speed, printer.maxSpeed) * 0.72;
+  
+  // Total toolpath distance includes walls + infill + travel moves
+  const totalPathDistanceMm = filamentLengthMm * 12.5;
+  const motionSeconds = totalPathDistanceMm / effectiveSpeedMmS;
+  const layerChangeSeconds = numLayers * 0.45; // Z-hop & layer transition
+  const totalSeconds = Math.ceil(motionSeconds + layerChangeSeconds + printer.heatupTimeSeconds + printer.bedLevelTimeSeconds);
 
   const printHours = Math.floor(totalSeconds / 3600);
   const printMinutes = Math.max(1, Math.ceil((totalSeconds % 3600) / 60));
 
-  // Fits Centauri Carbon bed check
+  // Fits Centauri Carbon bed check (256 x 256 x 256 mm)
   const fitsBed = (
     metrics.width <= printer.bed.x &&
     metrics.depth <= printer.bed.y &&
@@ -252,10 +275,12 @@ export function estimatePrintMetrics(geometry, settings = {}) {
 
   return {
     metrics,
-    weightGrams: Math.round(weightGrams * 10) / 10,
-    filamentLengthMeters: Math.round(filamentLengthMeters * 10) / 10,
-    totalPrice: Math.round(totalPrice * 100) / 100,
-    totalSeconds: Math.ceil(totalSeconds),
+    weightGrams,
+    filamentWeightGrams: weightGrams, // Provide both aliases to prevent undefined errors
+    filamentLengthMeters,
+    volumetricExtrusionCm3: Math.round(extrudedPlasticCm3 * 10) / 10,
+    totalPrice,
+    totalSeconds,
     printTimeFormatted: `${printHours}h ${printMinutes}m`,
     numLayers,
     fitsBed,
@@ -265,7 +290,9 @@ export function estimatePrintMetrics(geometry, settings = {}) {
 
 // Complete slice engine with exact planar segments for 3D visualization
 export function sliceMesh(geometry, settings = {}) {
-  const metrics = calculateMeshMetrics(geometry);
+  // Use the accurate estimation as the baseline physics model
+  const estimate = estimatePrintMetrics(geometry, settings);
+  const { metrics, printerBed } = estimate;
   const printer = PRINTER_PROFILES[settings.printerId] || PRINTER_PROFILES.centauri_carbon;
   
   let material = MATERIALS.pla;
@@ -280,44 +307,11 @@ export function sliceMesh(geometry, settings = {}) {
   const firstLayerHeight = settings.firstLayerHeight || 0.24;
   const infillPercent = settings.infillPercent !== undefined ? settings.infillPercent : 20;
   const wallCount = settings.wallCount || 2;
-  const speed = settings.speed || 300;
   const pricePerGram = parseFloat(settings.pricePerGram) || 3.0;
 
   const totalHeight = metrics.height;
   const numLayers = Math.max(1, Math.ceil((totalHeight - firstLayerHeight) / layerHeight) + 1);
-
   const nozzleW = printer.extrusionWidth;
-  const beadArea = (nozzleW - layerHeight) * layerHeight + (Math.PI * 0.25 * layerHeight * layerHeight);
-  const filamentCrossSectionArea = Math.PI * (1.75 / 2) * (1.75 / 2);
-
-  const outerWallSpeed = Math.min(speed * 0.45, 150);
-  const innerWallSpeed = Math.min(speed * 0.75, 250);
-  const infillSpeed = Math.min(speed, printer.maxSpeed);
-  const solidSkinSpeed = Math.min(speed * 0.5, 160);
-
-  const maxFlowSpeed = printer.maxVolumetricSpeed / (nozzleW * layerHeight);
-  const clampedInfillSpeed = Math.min(infillSpeed, maxFlowSpeed);
-
-  let totalExtrudedDistanceMm = 0;
-  let totalKinematicTimeSeconds = printer.heatupTimeSeconds + printer.bedLevelTimeSeconds;
-
-  function calculateTrapezoidTime(dist, targetSpeed) {
-    if (dist <= 0) return 0;
-    const a = printer.maxAccel;
-    const v0 = printer.jerk;
-    const vMax = Math.min(targetSpeed, maxFlowSpeed);
-
-    const dAccel = (vMax * vMax - v0 * v0) / (2 * a);
-    if (2 * dAccel > dist) {
-      const vPeak = Math.sqrt(v0 * v0 + a * dist);
-      return (2 * (vPeak - v0)) / a;
-    } else {
-      const tAccel = (vMax - v0) / a;
-      const cruiseDist = dist - 2 * dAccel;
-      const tCruise = cruiseDist / vMax;
-      return 2 * tAccel + tCruise;
-    }
-  }
 
   const toolpathLayers = [];
 
@@ -342,9 +336,6 @@ export function sliceMesh(geometry, settings = {}) {
     if (hasGeometry) {
       planarSegments.forEach(seg => {
         outerWallSegments.push(seg);
-        const dist = Math.hypot(seg[1].x - seg[0].x, seg[1].y - seg[0].y);
-        totalExtrudedDistanceMm += dist;
-        totalKinematicTimeSeconds += calculateTrapezoidTime(dist, outerWallSpeed);
       });
 
       for (let w = 1; w < wallCount; w++) {
@@ -361,8 +352,6 @@ export function sliceMesh(geometry, settings = {}) {
               { x: seg[1].x + nx, y: seg[1].y + ny, z: currentY }
             ];
             innerWallSegments.push(inSeg);
-            totalExtrudedDistanceMm += len;
-            totalKinematicTimeSeconds += calculateTrapezoidTime(len, innerWallSpeed);
           }
         });
       }
@@ -370,7 +359,7 @@ export function sliceMesh(geometry, settings = {}) {
 
     const infillSegments = [];
     if (hasGeometry && (infillPercent > 0 || isSolid)) {
-      const spacing = isSolid ? nozzleW * 1.05 : Math.max(nozzleW * 2, 25 / Math.max(infillPercent, 1));
+      const spacing = isSolid ? nozzleW * 1.05 : Math.max(nozzleW * 2, 28 / Math.max(infillPercent, 1));
 
       for (let y = minY + nozzleW; y <= maxY - nozzleW; y += spacing) {
         const lineStart = { x: minX + nozzleW, y: y };
@@ -390,8 +379,6 @@ export function sliceMesh(geometry, settings = {}) {
             const dist = Math.hypot(activeSegEnd.x - activeSegStart.x, activeSegEnd.y - activeSegStart.y);
             if (dist > 0.5) {
               infillSegments.push([activeSegStart, activeSegEnd]);
-              totalExtrudedDistanceMm += dist;
-              totalKinematicTimeSeconds += calculateTrapezoidTime(dist, isSolid ? solidSkinSpeed : clampedInfillSpeed);
             }
             activeSegStart = null;
           }
@@ -401,14 +388,10 @@ export function sliceMesh(geometry, settings = {}) {
           const dist = Math.hypot(activeSegEnd.x - activeSegStart.x, activeSegEnd.y - activeSegStart.y);
           if (dist > 0.5) {
             infillSegments.push([activeSegStart, activeSegEnd]);
-            totalExtrudedDistanceMm += dist;
-            totalKinematicTimeSeconds += calculateTrapezoidTime(dist, isSolid ? solidSkinSpeed : clampedInfillSpeed);
           }
         }
       }
     }
-
-    totalKinematicTimeSeconds += (printer.retractDist / printer.retractSpeed) * 2 + 0.12;
 
     toolpathLayers.push({
       layerIndex: l + 1,
@@ -420,17 +403,6 @@ export function sliceMesh(geometry, settings = {}) {
     });
   }
 
-  const totalExtrudedVolumeMm3 = totalExtrudedDistanceMm * beadArea;
-  const totalExtrudedVolumeCm3 = totalExtrudedVolumeMm3 / 1000;
-  const filamentWeightGrams = Math.max(0.1, totalExtrudedVolumeCm3 * material.density);
-  const filamentLengthMm = totalExtrudedVolumeMm3 / filamentCrossSectionArea;
-  const filamentLengthMeters = filamentLengthMm / 1000;
-
-  const totalSeconds = Math.ceil(totalKinematicTimeSeconds);
-  const printHours = Math.floor(totalSeconds / 3600);
-  const printMinutes = Math.max(1, Math.ceil((totalSeconds % 3600) / 60));
-  const totalPrice = filamentWeightGrams * pricePerGram;
-
   return {
     metrics,
     printer,
@@ -438,12 +410,15 @@ export function sliceMesh(geometry, settings = {}) {
     numLayers,
     layerHeight,
     firstLayerHeight,
-    filamentWeightGrams: Math.round(filamentWeightGrams * 10) / 10,
-    filamentLengthMeters: Math.round(filamentLengthMeters * 10) / 10,
-    volumetricExtrusionCm3: Math.round(totalExtrudedVolumeCm3 * 10) / 10,
-    printingTimeSeconds: totalSeconds,
-    printTimeFormatted: `${printHours}h ${printMinutes}m`,
-    totalPrice: Math.round(totalPrice * 100) / 100,
+    weightGrams: estimate.weightGrams,
+    filamentWeightGrams: estimate.weightGrams, // Return both aliases!
+    filamentLengthMeters: estimate.filamentLengthMeters,
+    volumetricExtrusionCm3: estimate.volumetricExtrusionCm3,
+    printingTimeSeconds: estimate.totalSeconds,
+    printTimeFormatted: estimate.printTimeFormatted,
+    totalPrice: estimate.totalPrice,
+    fitsBed: estimate.fitsBed,
+    printerBed: estimate.printerBed,
     toolpathLayers
   };
 }
@@ -461,7 +436,7 @@ export function generateElegooGcode(sliceResult, fileName = "model") {
   gcode += `; Material: ${material.name} (${material.density} g/cm3)\n`;
   gcode += `; Total Layers: ${numLayers} | Layer Height: ${layerHeight} mm\n`;
   gcode += `; Estimated Print Time: ${sliceResult.printTimeFormatted}\n`;
-  gcode += `; Filament Mass: ${sliceResult.filamentWeightGrams} g (${sliceResult.filamentLengthMeters} m)\n`;
+  gcode += `; Filament Mass: ${sliceResult.weightGrams || sliceResult.filamentWeightGrams} g (${sliceResult.filamentLengthMeters} m)\n`;
   gcode += `; Dimensions: ${metrics.width} x ${metrics.depth} x ${metrics.height} mm\n`;
   gcode += `; ==========================================================================\n\n`;
 

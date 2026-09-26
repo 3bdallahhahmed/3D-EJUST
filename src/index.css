@@ -2099,3 +2099,91 @@ label {
   to { transform: rotate(360deg); }
 }
 
+/* =============================================================
+   THEME TOGGLE RESPONSIVE PLACEMENT
+   ============================================================= */
+.desktop-theme-toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  padding: 8px 12px;
+  border-radius: var(--radius-full);
+  transition: all 0.25s var(--ease-smooth);
+}
+
+.desktop-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent);
+}
+
+@media (min-width: 769px) {
+  .mobile-theme-toggle {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .desktop-theme-toggle {
+    display: none !important;
+  }
+  .mobile-theme-toggle {
+    display: flex !important;
+  }
+}
+
+/* =============================================================
+   ORDER REVIEW SUMMARY STYLING (HIGH CONTRAST & VISIBILITY)
+   ============================================================= */
+.review-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 24px;
+  background: var(--bg-surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-glass);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .review-summary-card {
+  background: rgba(20, 24, 34, 0.88);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #F0F4F8;
+}
+
+[data-theme="light"] .review-summary-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #111827;
+}
+
+.review-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  gap: 16px;
+}
+
+.review-item-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.review-item-value {
+  color: var(--text-primary);
+  font-weight: 700;
+  text-align: right;
+}
+
+

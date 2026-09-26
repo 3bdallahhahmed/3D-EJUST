@@ -43,13 +43,41 @@ const STLViewer = forwardRef(function STLViewer({
   const [soloLayer, setSoloLayer] = useState(false);
   const [isSlicing, setIsSlicing] = useState(false);
 
+  // Auto-frame camera based on model size
+  function autoFrameCamera(geo) {
+    if (!geo || !controlsRef.current || !cameraRef.current) return;
+    geo.computeBoundingBox();
+    const bbox = geo.boundingBox;
+    const sx = Math.max(1, bbox.max.x - bbox.min.x);
+    const sy = Math.max(1, bbox.max.y - bbox.min.y);
+    const sz = Math.max(1, bbox.max.z - bbox.min.z);
+    const modelMax = Math.max(sx, sy, sz);
+
+    const targetY = Math.max(6, sy * 0.4);
+    controlsRef.current.target.set(0, targetY, 0);
+
+    // Position camera so model fills 60-70% of the viewport prominently
+    const dist = Math.max(85, modelMax * 1.55);
+    cameraRef.current.position.set(dist * 0.72, dist * 0.65, dist * 0.82);
+    cameraRef.current.near = 1;
+    cameraRef.current.far = 4000;
+    cameraRef.current.updateProjectionMatrix();
+    controlsRef.current.update();
+  }
+
   // Initialize Three.js Scene
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
 
+    const getH = () => {
+      if (typeof height === 'number') return height;
+      if (typeof height === 'string' && height.endsWith('px')) return parseInt(height, 10);
+      return container.clientHeight && container.clientHeight > 50 ? container.clientHeight : 400;
+    };
+
     const width = container.clientWidth || 300;
-    const h = parseInt(height, 10) || 280;
+    const h = getH();
 
     // Scene
     const scene = new THREE.Scene();
@@ -57,12 +85,12 @@ const STLViewer = forwardRef(function STLViewer({
     sceneRef.current = scene;
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(40, width / h, 1, 3000);
-    camera.position.set(160, 180, 240);
+    const camera = new THREE.PerspectiveCamera(40, width / h, 1, 4000);
+    camera.position.set(130, 120, 160);
     cameraRef.current = camera;
 
     // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setSize(width, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -75,38 +103,38 @@ const STLViewer = forwardRef(function STLViewer({
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI / 2 + 0.05; // Bed floor clamp
-    controls.minDistance = 30;
-    controls.maxDistance = 800;
-    controls.target.set(0, 25, 0);
+    controls.minDistance = 20;
+    controls.maxDistance = 1200;
+    controls.target.set(0, 15, 0);
     controlsRef.current = controls;
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
-    keyLight.position.set(120, 240, 160);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    keyLight.position.set(150, 260, 180);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 1024;
     keyLight.shadow.mapSize.height = 1024;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0x4070a0, 0.6);
-    fillLight.position.set(-120, 100, -120);
+    const fillLight = new THREE.DirectionalLight(0x4070a0, 0.65);
+    fillLight.position.set(-140, 120, -140);
     scene.add(fillLight);
 
-    const rimLight = new THREE.PointLight(0xff8000, 1.2, 350);
-    rimLight.position.set(0, 120, -150);
+    const rimLight = new THREE.PointLight(0xff8000, 1.4, 400);
+    rimLight.position.set(0, 140, -160);
     scene.add(rimLight);
 
     // Build Plate (Centauri Carbon 256x256mm)
     const bedGroup = new THREE.Group();
     const bedW = 256, bedD = 256;
 
-    // PEI surface plate
+    // PEI textured surface plate
     const bedGeo = new THREE.BoxGeometry(bedW, 2, bedD);
     const bedMat = new THREE.MeshStandardMaterial({
-      color: 0x181c22,
+      color: 0x161a22,
       roughness: 0.85,
       metalness: 0.2
     });
@@ -115,8 +143,8 @@ const STLViewer = forwardRef(function STLViewer({
     bedMesh.receiveShadow = true;
     bedGroup.add(bedMesh);
 
-    // Grid lines
-    const grid = new THREE.GridHelper(bedW, 25.6, 0xff8000, 0x27303d);
+    // Grid lines (25.6mm squares = 10x10 divisions on 256mm bed)
+    const grid = new THREE.GridHelper(bedW, 10, 0xff8000, 0x27303d);
     grid.position.y = 0.05;
     bedGroup.add(grid);
 
@@ -157,9 +185,12 @@ const STLViewer = forwardRef(function STLViewer({
     const resizeObserver = new ResizeObserver(() => {
       if (!container || !renderer || !camera) return;
       const newW = container.clientWidth || 300;
-      camera.aspect = newW / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newW, h);
+      const newH = getH();
+      if (newW > 0 && newH > 0) {
+        camera.aspect = newW / newH;
+        camera.updateProjectionMatrix();
+        renderer.setSize(newW, newH);
+      }
     });
     resizeObserver.observe(container);
 
@@ -251,7 +282,7 @@ const STLViewer = forwardRef(function STLViewer({
     geo.computeVertexNormals();
     geometryRef.current = geo;
 
-    // Center and place base on bed (y = 0)
+    // Center horizontally and ground base on bed (y = 0)
     geo.computeBoundingBox();
     const bbox = geo.boundingBox;
     const cx = (bbox.max.x + bbox.min.x) / 2;
@@ -260,7 +291,7 @@ const STLViewer = forwardRef(function STLViewer({
     geo.translate(-cx, -cy, -cz);
     geo.computeBoundingBox();
 
-    // Material with liquid glass/McLaren aesthetic
+    // Material with liquid glass / McLaren aesthetic
     const mat = new THREE.MeshStandardMaterial({
       color: 0xff8000, // McLaren Orange
       metalness: 0.25,
@@ -272,14 +303,8 @@ const STLViewer = forwardRef(function STLViewer({
     mesh.receiveShadow = true;
     modelGroupRef.current.add(mesh);
 
-    // Adjust camera target and distance
-    const maxDim = Math.max(bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z);
-    if (controlsRef.current && cameraRef.current) {
-      controlsRef.current.target.set(0, (bbox.max.y - bbox.min.y) / 2, 0);
-      const camDist = Math.max(120, maxDim * 2.2);
-      cameraRef.current.position.set(camDist * 0.8, camDist * 0.9, camDist * 1.1);
-      controlsRef.current.update();
-    }
+    // Auto-frame camera so model is prominent and clean
+    autoFrameCamera(geo);
 
     // Estimate print metrics
     const est = estimatePrintMetrics(geo, {
@@ -408,10 +433,13 @@ const STLViewer = forwardRef(function STLViewer({
 
   // Reset Camera View
   function handleResetCamera() {
-    if (!controlsRef.current || !cameraRef.current) return;
-    cameraRef.current.position.set(160, 180, 240);
-    controlsRef.current.target.set(0, 25, 0);
-    controlsRef.current.update();
+    if (geometryRef.current) {
+      autoFrameCamera(geometryRef.current);
+    } else if (controlsRef.current && cameraRef.current) {
+      cameraRef.current.position.set(130, 120, 160);
+      controlsRef.current.target.set(0, 15, 0);
+      controlsRef.current.update();
+    }
   }
 
   // Expose slicing & G-code methods via ref
@@ -419,13 +447,14 @@ const STLViewer = forwardRef(function STLViewer({
     slice: handleSliceNow,
     getSliceResult: () => sliceData,
     generateGcode: (name) => sliceData ? generateElegooGcode(sliceData, name) : null,
-    resetCamera: handleResetCamera
+    resetCamera: handleResetCamera,
+    autoFrame: () => autoFrameCamera(geometryRef.current)
   }));
 
   return (
-    <div style={{ position: 'relative', width: '100%', height, borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-glass)', background: 'rgba(10, 12, 16, 0.75)' }}>
+    <div style={{ position: 'relative', width: '100%', height, minHeight: typeof height === 'number' ? height : undefined, borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-glass)', background: 'rgba(10, 12, 16, 0.85)' }}>
       {/* 3D Canvas Mount Point */}
-      <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={mountRef} style={{ width: '100%', height: '100%', minHeight: '100%' }} />
 
       {/* Loading Overlay */}
       {(loading || isSlicing) && (
@@ -437,7 +466,7 @@ const STLViewer = forwardRef(function STLViewer({
 
       {/* Top Floating Controls Bar */}
       <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'none', zIndex: 5 }}>
-        <div style={{ pointerEvents: 'auto', display: 'flex', gap: 6, background: 'rgba(20, 25, 35, 0.75)', backdropFilter: 'blur(12px)', padding: '4px 8px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-glass)' }}>
+        <div style={{ pointerEvents: 'auto', display: 'flex', gap: 6, background: 'rgba(20, 25, 35, 0.8)', backdropFilter: 'blur(12px)', padding: '4px 8px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-glass)' }}>
           <button
             type="button"
             className="btn btn-sm"
@@ -461,7 +490,7 @@ const STLViewer = forwardRef(function STLViewer({
           className="btn btn-sm btn-glass"
           style={{ pointerEvents: 'auto', padding: '4px 10px', fontSize: 11, borderRadius: 'var(--radius-full)' }}
           onClick={handleResetCamera}
-          title="Reset Camera View"
+          title="Reset Camera & Center Model"
         >
           Reset View
         </button>
