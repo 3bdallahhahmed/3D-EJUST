@@ -495,6 +495,8 @@ export default function App() {
 
   // 3D Slicer, Estimation & Hardware Dispatch State
   const [orderInfill, setOrderInfill] = useState(20);
+  const [orderLayerHeight, setOrderLayerHeight] = useState(0.20);
+  const [orderNozzle, setOrderNozzle] = useState(0.40);
   const [clientMetrics, setClientMetrics] = useState(null);
   const [copiedTrackingCode, setCopiedTrackingCode] = useState(false);
   const [adminSlicerOrder, setAdminSlicerOrder] = useState(null);
@@ -867,7 +869,7 @@ export default function App() {
       const trackingCode = generateTrackingCode();
       const weightGrams = clientMetrics ? clientMetrics.weightGrams : 0;
       const calculatedTotal = clientMetrics ? clientMetrics.totalPrice : (weightGrams * (parseFloat(config.price_per_gram) || 3));
-      const formattedNotes = `[INFILL:${orderInfill}%] ${newOrder.notes || ""}`.trim();
+      const formattedNotes = `[PROFILE:${orderLayerHeight}mm | NOZZLE:${orderNozzle}mm | INFILL:${orderInfill}%] ${newOrder.notes || ""}`.trim();
 
       const payload = {
         name: newOrder.name,
@@ -1742,7 +1744,21 @@ export default function App() {
                     </div>
                   </div>
                   <div className="form-row">
-                    <div style={{ gridColumn: "1 / -1" }}>
+                    <div>
+                      <label>Print Quality / Profile</label>
+                      <select value={orderLayerHeight} onChange={e => {
+                        const lh = parseFloat(e.target.value);
+                        setOrderLayerHeight(lh);
+                        if (lh <= 0.10) setOrderNozzle(0.20);
+                        else setOrderNozzle(0.40);
+                      }}>
+                        <option value={0.20}>0.20 mm Standard (0.4 Nozzle - Balanced)</option>
+                        <option value={0.10}>0.10 mm Ultra-Fine (0.2 Nozzle - High Precision)</option>
+                        <option value={0.12}>0.12 mm High Detail (0.4 Nozzle)</option>
+                        <option value={0.28}>0.28 mm Draft / Rapid (0.4 Nozzle)</option>
+                      </select>
+                    </div>
+                    <div>
                       <label>Infill Density</label>
                       <select value={orderInfill} onChange={e => setOrderInfill(parseInt(e.target.value, 10))}>
                         <option value={20}>Standard (20%) - Recommended for Most Parts</option>
@@ -1782,6 +1798,8 @@ export default function App() {
                       <STLViewer
                         file={selectedFiles.find(f => f.name.toLowerCase().endsWith(".stl"))}
                         infillPercent={orderInfill}
+                        layerHeight={orderLayerHeight}
+                        nozzleSize={orderNozzle}
                         materialKey={newOrder.material || "pla"}
                         pricePerGram={config.price_per_gram}
                         onMetricsChange={setClientMetrics}
@@ -1815,6 +1833,12 @@ export default function App() {
                               <div>
                                 <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Dimensions</div>
                                 <div style={{ fontSize: 12, fontWeight: 700 }}>{clientMetrics.metrics.width} x {clientMetrics.metrics.depth} x {clientMetrics.metrics.height} mm</div>
+                              </div>
+                            )}
+                            {clientMetrics.filamentLengthMeters && (
+                              <div>
+                                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Filament & Layers</div>
+                                <div style={{ fontSize: 12, fontWeight: 700 }}>{clientMetrics.filamentLengthMeters}m &bull; {clientMetrics.numLayers} L</div>
                               </div>
                             )}
                           </div>
@@ -1859,6 +1883,10 @@ export default function App() {
                     <div className="review-item">
                       <span className="review-item-label">Material & Color</span>
                       <span className="review-item-value">{newOrder.material?.toUpperCase()} ({newOrder.color})</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Print Profile</span>
+                      <span className="review-item-value">{orderLayerHeight} mm ({orderNozzle} mm Nozzle)</span>
                     </div>
                     <div className="review-item">
                       <span className="review-item-label">Infill Density</span>

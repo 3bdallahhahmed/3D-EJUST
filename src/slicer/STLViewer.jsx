@@ -19,6 +19,7 @@ const STLViewer = forwardRef(function STLViewer({
   materialKey = 'pla',
   pricePerGram = 3.0,
   layerHeight = 0.20,
+  nozzleSize = 0.40,
   printerId = 'centauri_carbon',
   onMetricsChange,
   showSlicerControls = false,
@@ -243,7 +244,7 @@ const STLViewer = forwardRef(function STLViewer({
     }
   }, [file, fileUrl]);
 
-  // Re-estimate metrics when infill, material, or pricePerGram changes
+  // Re-estimate metrics when infill, material, pricePerGram, layerHeight, or nozzleSize changes
   useEffect(() => {
     if (!geometryRef.current) return;
     const est = estimatePrintMetrics(geometryRef.current, {
@@ -251,10 +252,11 @@ const STLViewer = forwardRef(function STLViewer({
       materialKey,
       pricePerGram,
       layerHeight,
+      nozzleSize: nozzleSize || (layerHeight <= 0.10 ? 0.20 : 0.40),
       printerId
     });
     if (onMetricsChange) onMetricsChange(est);
-  }, [infillPercent, materialKey, pricePerGram, layerHeight, printerId]);
+  }, [infillPercent, materialKey, pricePerGram, layerHeight, nozzleSize, printerId]);
 
   // Clear 3D model
   function clearModel() {
@@ -312,6 +314,7 @@ const STLViewer = forwardRef(function STLViewer({
       materialKey,
       pricePerGram,
       layerHeight,
+      nozzleSize: nozzleSize || (layerHeight <= 0.10 ? 0.20 : 0.40),
       printerId
     });
     if (onMetricsChange) onMetricsChange(est);
@@ -332,6 +335,7 @@ const STLViewer = forwardRef(function STLViewer({
           materialKey,
           pricePerGram,
           layerHeight,
+          nozzleSize: nozzleSize || (layerHeight <= 0.10 ? 0.20 : 0.40),
           printerId
         });
         setSliceData(res);

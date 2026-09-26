@@ -17,6 +17,7 @@ export default function AdminSlicerModal({
 
   const [infillPercent, setInfillPercent] = useState(20);
   const [layerHeight, setLayerHeight] = useState(0.20);
+  const [nozzleSize, setNozzleSize] = useState(0.40);
   const [speed, setSpeed] = useState(300);
   const [metrics, setMetrics] = useState(null);
   const [hasSliced, setHasSliced] = useState(false);
@@ -101,6 +102,7 @@ export default function AdminSlicerModal({
               fileUrl={stlUrl}
               infillPercent={infillPercent}
               layerHeight={layerHeight}
+              nozzleSize={nozzleSize}
               materialKey={order.material || 'pla'}
               pricePerGram={pricePerGram}
               onMetricsChange={handleMetricsUpdate}
@@ -119,11 +121,17 @@ export default function AdminSlicerModal({
 
               <div className="form-row" style={{ marginBottom: 12 }}>
                 <div>
-                  <label>Layer Height</label>
-                  <select value={layerHeight} onChange={(e) => setLayerHeight(parseFloat(e.target.value))}>
-                    <option value={0.12}>0.12 mm (Fine Quality)</option>
-                    <option value={0.20}>0.20 mm (Standard)</option>
-                    <option value={0.28}>0.28 mm (Draft / Rapid)</option>
+                  <label>Layer Height & Profile</label>
+                  <select value={layerHeight} onChange={(e) => {
+                    const lh = parseFloat(e.target.value);
+                    setLayerHeight(lh);
+                    if (lh <= 0.10) setNozzleSize(0.20);
+                    else setNozzleSize(0.40);
+                  }}>
+                    <option value={0.10}>0.10 mm (0.2 Nozzle - Elegoo CC)</option>
+                    <option value={0.12}>0.12 mm (0.4 Nozzle - Fine)</option>
+                    <option value={0.20}>0.20 mm (0.4 Nozzle - Standard)</option>
+                    <option value={0.28}>0.28 mm (0.4 Nozzle - Draft)</option>
                   </select>
                 </div>
                 <div>
@@ -163,6 +171,14 @@ export default function AdminSlicerModal({
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Filament Mass</div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{weight} g</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Filament Length</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{metrics?.filamentLengthMeters ? `${metrics.filamentLengthMeters} m` : '--'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Total Layers</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{metrics?.numLayers ? `${metrics.numLayers} layers` : '--'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Material Rate</div>

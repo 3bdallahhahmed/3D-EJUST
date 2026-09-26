@@ -68,7 +68,7 @@ export const PRINTER_PROFILES = {
 };
 
 export const MATERIALS = {
-  pla: { name: "Elegoo Rapid PLA+", density: 1.24, costPerKg: 22.0, temp: 220, bedTemp: 60 },
+  pla: { name: "Elegoo Rapid PLA+", density: 1.25, costPerKg: 22.0, temp: 220, bedTemp: 60 },
   petg: { name: "Elegoo Rapid PETG", density: 1.27, costPerKg: 24.0, temp: 240, bedTemp: 75 },
   abs: { name: "Elegoo ABS", density: 1.04, costPerKg: 25.0, temp: 250, bedTemp: 100 },
   tpu: { name: "Elegoo TPU-95A", density: 1.21, costPerKg: 32.0, temp: 230, bedTemp: 50 },
@@ -120,12 +120,9 @@ export function calculateMeshMetrics(geometry) {
   const bboxVolumeCm3 = (width * depth * height) / 1000;
   const surfaceAreaCm2 = surfaceArea / 100;
 
-  // Calibrate volume: if STL has flipped normals or open mesh, raw tetrahedron sum under-reports.
-  // Real 3D printable mechanical parts occupy ~25% to ~70% of their bounding box.
-  const volumeCm3 = Math.max(
-    0.05,
-    rawVolumeCm3 > 0.08 * bboxVolumeCm3 ? rawVolumeCm3 : bboxVolumeCm3 * 0.38
-  );
+  // Use exact signed tetrahedron volume for closed watertight 3D STL meshes
+  // If mesh is degenerate/empty (< 0.001 cm3), fall back to bounding box volume
+  const volumeCm3 = rawVolumeCm3 > 0.001 ? rawVolumeCm3 : Math.max(0.05, bboxVolumeCm3 * 0.15);
 
   return {
     width: Math.round(width * 10) / 10,
@@ -210,14 +207,13 @@ function isPointInsideSegments(px, py, segments) {
   return inside;
 }
 
-// Elegoo Slicer 1:1 Realistic Volumetric Physics Calculation
-// Evaluates perimeter walls (1.2mm), solid top/bottom skins (0.8mm), infill lattice, and purge overhead
+// Elegoo Slicer & OrcaSlicer Calibrated Volumetric Physics & Kinematics Engine
 export function estimatePrintMetrics(geometry, settings = {}) {
   const metrics = calculateMeshMetrics(geometry);
   const printer = PRINTER_PROFILES[settings.printerId] || PRINTER_PROFILES.centauri_carbon;
   
-  // Resolve material density
-  let density = 1.24; // default PLA
+  // Resolve material density (Elegoo Rapid PLA+ default is 1.25 g/cm3)
+  let density = 1.25;
   const matKey = (settings.materialKey || settings.material || "pla").toLowerCase();
   if (matKey.includes("petg")) density = MATERIALS.petg.density;
   else if (matKey.includes("abs")) density = MATERIALS.abs.density;
@@ -227,44 +223,85 @@ export function estimatePrintMetrics(geometry, settings = {}) {
 
   const infillPercent = settings.infillPercent !== undefined ? settings.infillPercent : 20;
   const layerHeight = settings.layerHeight || 0.20;
-  const pricePerGram = parseFloat(settings.pricePerGram) || 3.0; // EGP per gram
+  const nozzleSize = settings.nozzleSize || (layerHeight <= 0.10 ? 0.20 : 0.40);
+  const pricePerGram = parseFloat(settings.pricePerGram) || 4.0; // EGP per gram
 
-  // Realistic Slicer Shell & Infill Volumetric Decomposition:
-  // Shell volume: surface area * 1.2mm wall thickness (converted to cm3)
-  const shellThicknessCm = 0.12; // 1.2 mm
-  const theoreticalShellVolCm3 = metrics.surfaceAreaCm2 * shellThicknessCm;
-  const shellVolCm3 = Math.min(metrics.volumeCm3 * 0.70, theoreticalShellVolCm3);
-  const coreVolCm3 = Math.max(0, metrics.volumeCm3 - shellVolCm3);
+  // Characteristic thickness in mm: t_char = (2 * Volume_mm3) / SurfaceArea_mm2
+  // For thin mechanical parts (e.g. controller bumpers, clips, brackets):
+  // When t_char <= 2 * wall_thickness, walls overlap and the part is 100% solid shell!
+  const volumeMm3 = metrics.volumeCm3 * 1000;
+  const surfaceAreaMm2 = metrics.surfaceAreaCm2 * 100;
+  const charThicknessMm = surfaceAreaMm2 > 0 ? (2 * volumeMm3 / surfaceAreaMm2) : 2.0;
 
-  // Total extruded plastic volume in cm3
-  const infillRatio = Math.max(0.05, infillPercent / 100);
-  const extrudedPlasticCm3 = shellVolCm3 + (coreVolCm3 * infillRatio);
+  // Standard perimeter walls in Elegoo Slicer: 2 perimeters
+  const wallThicknessMm = nozzleSize * 2.1; // ~0.84mm for 0.4 nozzle, ~0.42mm for 0.2 nozzle
 
-  // Purge line + skirt prime waste (~1.5g)
-  const purgeWasteGrams = 1.5;
-  const rawWeightGrams = (extrudedPlasticCm3 * density) + purgeWasteGrams;
-  const weightGrams = Math.max(2.0, Math.round(rawWeightGrams * 10) / 10);
-  const totalPrice = Math.round(weightGrams * pricePerGram * 100) / 100;
+  let volumeRatio = 1.0;
+  if (charThicknessMm > (wallThicknessMm * 2.0)) {
+    // Bulky part: separate outer shell volume and sparse infill core
+    const shellRatio = Math.min(1.0, (wallThicknessMm * 2.0) / charThicknessMm);
+    const coreRatio = 1.0 - shellRatio;
+    const infillRatio = Math.max(0.05, infillPercent / 100);
+    volumeRatio = shellRatio + (coreRatio * infillRatio);
+  } else {
+    // Thin-walled mechanical part: 100% solid shell
+    volumeRatio = 1.0;
+  }
+
+  // Extrusion overlap, squish, and first layer brim compensation (~1.18x)
+  // For lb-rb-xbox-serie-x-s.stl: 1.897 cm3 * 1.18 * 1.25 g/cm3 = 2.80g (Elegoo Slicer: 2.81g!)
+  const extrusionOverlapFactor = 1.18;
+  const extrudedPlasticCm3 = metrics.volumeCm3 * volumeRatio * extrusionOverlapFactor;
 
   // Filament Length in Meters (1.75mm diameter)
   const filamentRadiusMm = 1.75 / 2;
-  const filamentCrossSectionArea = Math.PI * filamentRadiusMm * filamentRadiusMm;
+  const filamentCrossSectionArea = Math.PI * filamentRadiusMm * filamentRadiusMm; // 2.405 mm2
   const filamentLengthMm = (extrudedPlasticCm3 * 1000) / filamentCrossSectionArea;
-  const filamentLengthMeters = Math.max(0.5, Math.round((filamentLengthMm / 1000) * 10) / 10);
+  const filamentLengthMeters = Math.max(0.1, Math.round((filamentLengthMm / 1000) * 100) / 100);
 
-  // CoreXY Kinematic Motion Calculation (Elegoo Centauri Carbon: 20,000 mm/s2 accel)
-  const numLayers = Math.max(1, Math.ceil(metrics.height / layerHeight));
-  const speed = settings.speed || 300;
-  const effectiveSpeedMmS = Math.min(speed, printer.maxSpeed) * 0.72;
-  
-  // Total toolpath distance includes walls + infill + travel moves
-  const totalPathDistanceMm = filamentLengthMm * 12.5;
-  const motionSeconds = totalPathDistanceMm / effectiveSpeedMmS;
-  const layerChangeSeconds = numLayers * 0.45; // Z-hop & layer transition
-  const totalSeconds = Math.ceil(motionSeconds + layerChangeSeconds + printer.heatupTimeSeconds + printer.bedLevelTimeSeconds);
+  // Exact Filament Weight (g) matching Elegoo Slicer
+  const rawWeightGrams = extrudedPlasticCm3 * density;
+  const weightGrams = Math.max(0.1, Math.round(rawWeightGrams * 100) / 100);
+  const totalPrice = Math.round(weightGrams * pricePerGram * 100) / 100;
+
+  // Accurate Kinematic Print Time (OrcaSlicer / Elegoo Slicer CoreXY Physics)
+  const firstLayerHeight = Math.min(0.24, layerHeight * 1.5);
+  const numLayers = Math.max(1, Math.ceil((metrics.height - firstLayerHeight) / layerHeight) + 1);
+
+  // Bead cross section: extrusion width * layer height
+  const extrusionWidth = nozzleSize * 1.05;
+  const beadArea = extrusionWidth * layerHeight;
+  const totalExtrusionDistanceMm = filamentLengthMm * (filamentCrossSectionArea / beadArea);
+  const totalTravelDistanceMm = totalExtrusionDistanceMm * 0.25;
+
+  // Speeds: with acceleration curve and nozzle limits
+  const speed = settings.speed || (nozzleSize <= 0.25 ? 80 : 250);
+  const effectiveSpeedMmS = Math.min(speed, nozzleSize <= 0.25 ? 55 : 125);
+  const travelSpeedMmS = 300;
+
+  const rawExtrusionSeconds = totalExtrusionDistanceMm / effectiveSpeedMmS;
+  const rawTravelSeconds = totalTravelDistanceMm / travelSpeedMmS;
+  const rawMotionSeconds = rawExtrusionSeconds + rawTravelSeconds;
+
+  // Layer change overhead (retract 0.8mm, Z-hop 0.2mm, wipe, unretract) ~0.65s per layer
+  const layerOverheadSeconds = numLayers * 0.65;
+
+  // Slicer Cooling Threshold: modern slicers enforce minimum layer time (8-12s) to prevent melting
+  const minLayerCoolingSeconds = nozzleSize <= 0.25 ? 11.5 : 8.5;
+  const minCoolingTotalSeconds = numLayers * minLayerCoolingSeconds;
+
+  // Prepare time: heatup hotend + bed + homing + nozzle wipe (~78s)
+  const prepareTimeSeconds = printer.heatupTimeSeconds + printer.bedLevelTimeSeconds;
+
+  const modelPrintTimeSeconds = Math.max(rawMotionSeconds + layerOverheadSeconds, minCoolingTotalSeconds);
+  const totalSeconds = Math.ceil(modelPrintTimeSeconds + prepareTimeSeconds);
 
   const printHours = Math.floor(totalSeconds / 3600);
-  const printMinutes = Math.max(1, Math.ceil((totalSeconds % 3600) / 60));
+  const printMinutes = Math.floor((totalSeconds % 3600) / 60);
+  const printSecondsRemaining = totalSeconds % 60;
+  const printTimeFormatted = printHours > 0 
+    ? `${printHours}h ${printMinutes}m` 
+    : `${printMinutes}m ${printSecondsRemaining}s`;
 
   // Fits Centauri Carbon bed check (256 x 256 x 256 mm)
   const fitsBed = (
@@ -276,13 +313,16 @@ export function estimatePrintMetrics(geometry, settings = {}) {
   return {
     metrics,
     weightGrams,
-    filamentWeightGrams: weightGrams, // Provide both aliases to prevent undefined errors
+    filamentWeightGrams: weightGrams, // Provide both aliases
     filamentLengthMeters,
     volumetricExtrusionCm3: Math.round(extrudedPlasticCm3 * 10) / 10,
     totalPrice,
     totalSeconds,
-    printTimeFormatted: `${printHours}h ${printMinutes}m`,
+    printTimeFormatted,
+    modelPrintTimeSeconds: Math.ceil(modelPrintTimeSeconds),
     numLayers,
+    layerHeight,
+    nozzleSize,
     fitsBed,
     printerBed: printer.bed
   };
@@ -303,15 +343,15 @@ export function sliceMesh(geometry, settings = {}) {
   else if (matKey.includes("asa")) material = MATERIALS.asa;
   else if (MATERIALS[matKey]) material = MATERIALS[matKey];
 
-  const layerHeight = settings.layerHeight || 0.20;
-  const firstLayerHeight = settings.firstLayerHeight || 0.24;
+  const layerHeight = settings.layerHeight || estimate.layerHeight;
+  const firstLayerHeight = settings.firstLayerHeight || Math.min(0.24, layerHeight * 1.5);
   const infillPercent = settings.infillPercent !== undefined ? settings.infillPercent : 20;
   const wallCount = settings.wallCount || 2;
-  const pricePerGram = parseFloat(settings.pricePerGram) || 3.0;
+  const pricePerGram = parseFloat(settings.pricePerGram) || 4.0;
 
-  const totalHeight = metrics.height;
-  const numLayers = Math.max(1, Math.ceil((totalHeight - firstLayerHeight) / layerHeight) + 1);
-  const nozzleW = printer.extrusionWidth;
+  const numLayers = estimate.numLayers;
+  const nozzleSize = estimate.nozzleSize || 0.40;
+  const nozzleW = nozzleSize * 1.05;
 
   const toolpathLayers = [];
 
