@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Float, Html, useProgress } from "@react-three/drei";
 import * as THREE from "three";
+import STLViewer from "./slicer/STLViewer.jsx";
+import AdminSlicerModal from "./slicer/AdminSlicerModal.jsx";
+import MoonrakerDispatchModal from "./slicer/MoonrakerDispatchModal.jsx";
+import { generateElegooGcode } from "./slicer/slicerEngine.js";
 
 // ─────────────────────────────────────────────────────────
 // Supabase
@@ -24,29 +28,37 @@ function generateTrackingCode() {
   return code;
 }
 
-function copyToClipboard(text) {
-  return new Promise((resolve) => {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(resolve).catch(() => {
-        fallbackCopy();
-        resolve();
-      });
-    } else {
-      fallbackCopy();
-      resolve();
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
     }
-    function fallbackCopy() {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      try { document.execCommand("copy"); } catch (e) { /* ignore */ }
-      document.body.removeChild(ta);
-    }
-  });
+  } catch (e) {
+    // continue to fallback
+  }
+
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.fontSize = "12pt";
+    ta.style.border = "0";
+    ta.style.padding = "0";
+    ta.style.margin = "0";
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.setAttribute("readonly", "");
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, 99999);
+    const success = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return success;
+  } catch (err) {
+    console.error("Fallback copy failed:", err);
+    return false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -243,65 +255,6 @@ const CubeIcon = () => (
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.25 }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
 );
 
-// ═══════════════════════════════════════════════════════════
-// FLOATING 3D ICONS COMPONENT
-// ═══════════════════════════════════════════════════════════
-function FloatingIcons({ icons }) {
-  const [scrollY, setScrollY] = useState(0);
-
-  useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          setScrollY(window.scrollY);
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  return (
-    <div className="floating-icons-container">
-      {icons.map((icon, idx) => {
-        const speed = icon.parallaxSpeed || (idx % 2 === 0 ? 0.35 : -0.25);
-        const yOffset = scrollY * speed;
-
-        return (
-          <div 
-            key={idx}
-            style={{
-              position: 'absolute',
-              top: icon.top,
-              bottom: icon.bottom,
-              left: icon.left,
-              right: icon.right,
-              transform: `translateY(${yOffset}px)`,
-              transition: 'transform 0.1s cubic-bezier(0.2, 0, 0.2, 1)',
-              zIndex: 0
-            }}
-          >
-            <img
-              src={`${import.meta.env.BASE_URL}assets/icons/${icon.src}`}
-              className="floating-icon"
-              style={{
-                width: icon.size,
-                animation: `${icon.reverse ? 'floatIconReverse' : 'floatIcon'} ${icon.duration || '6s'} ease-in-out infinite alternate`,
-                animationDelay: icon.delay || '0s',
-                opacity: icon.opacity || 0.85,
-                position: 'static'
-              }}
-              alt=""
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════
 // STATUS STEPPER
@@ -329,38 +282,19 @@ function StatusStepper({ status }) {
 // ═══════════════════════════════════════════════════════════
 function CopyableCode({ code }) {
   const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    // Try modern API first, then fallback
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }).catch(() => {
-        fallbackCopy(code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    } else {
-      fallbackCopy(code);
+  async function handleCopy() {
+    const success = await copyToClipboard(code);
+    if (success !== false) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 2200);
     }
-  }
-  function fallbackCopy(text) {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try { document.execCommand("copy"); } catch (e) { /* ignore */ }
-    document.body.removeChild(ta);
   }
   return (
     <div onClick={handleCopy} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
       <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.05em" }}>{code}</span>
-      <button className="copy-btn" onClick={(e) => { e.stopPropagation(); handleCopy(); }}>{copied ? "✓ Copied!" : "Tap to Copy"}</button>
+      <button type="button" className="copy-btn" onClick={(e) => { e.stopPropagation(); handleCopy(); }}>
+        {copied ? "Copied!" : "Tap to Copy"}
+      </button>
     </div>
   );
 }
@@ -405,7 +339,7 @@ function NotFoundPage() {
 
 const DEFAULT_CONFIG = {
   id: 1,
-  brand_name: "JUST print",
+  brand_name: "Etba3ly",
   hero_title: "Your Idea.\nMade Real.",
   hero_subtitle: "Upload your 3D design, pick your material, and we'll print it for you — fast, affordable, and right here on campus.",
   why_title: "Why Print With Us?",
@@ -500,11 +434,81 @@ export default function App() {
   const [newGalleryItem, setNewGalleryItem] = useState({ title: "", description: "" });
   const [newGalleryFiles, setNewGalleryFiles] = useState([]);
 
+  // 3D Slicer, Estimation & Hardware Dispatch State
+  const [orderInfill, setOrderInfill] = useState(20);
+  const [orderLayerHeight, setOrderLayerHeight] = useState(0.20);
+  const [orderNozzle, setOrderNozzle] = useState(0.40);
+  const [clientMetrics, setClientMetrics] = useState(null);
+  const [copiedTrackingCode, setCopiedTrackingCode] = useState(false);
+  const [adminSlicerOrder, setAdminSlicerOrder] = useState(null);
+  const [moonrakerOrder, setMoonrakerOrder] = useState(null);
+  const [moonrakerGcode, setMoonrakerGcode] = useState("");
+  const [externalPrinterStates, setExternalPrinterStates] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("jp_external_printer_states") || "{}"); } catch { return {}; }
+  });
+  const [externalPromptPrinter, setExternalPromptPrinter] = useState(null);
+  const [externalJobInput, setExternalJobInput] = useState("");
+
+  function handleSetExternalJob(printer) {
+    setExternalPromptPrinter(printer);
+    setExternalJobInput("");
+  }
+
+  function handleSaveExternalJob() {
+    if (!externalPromptPrinter) return;
+    const updated = {
+      ...externalPrinterStates,
+      [externalPromptPrinter]: {
+        status: "working",
+        jobName: externalJobInput.trim() || "Flash Drive / Direct USB Print",
+        timestamp: new Date().toISOString()
+      }
+    };
+    setExternalPrinterStates(updated);
+    localStorage.setItem("jp_external_printer_states", JSON.stringify(updated));
+    setExternalPromptPrinter(null);
+    setExternalJobInput("");
+    addToast(`Marked ${externalPromptPrinter} as active (USB Job)`, "success");
+  }
+
+  function handleClearExternalJob(printer) {
+    const updated = { ...externalPrinterStates };
+    delete updated[printer];
+    setExternalPrinterStates(updated);
+    localStorage.setItem("jp_external_printer_states", JSON.stringify(updated));
+    addToast(`${printer} marked as ready`, "info");
+  }
+
+  function handleOpenMoonrakerForOrder(order, gcode = null) {
+    setMoonrakerOrder(order);
+    if (gcode) {
+      setMoonrakerGcode(gcode);
+    } else {
+      setMoonrakerGcode(`; Centauri Job: ${order.ordername || 'Order'}\n; Tracking: ${order.tracking_code}\nG28\nM104 S220\nM140 S60\n`);
+    }
+  }
+
+  async function handleMoonrakerDispatchSuccess(printerName) {
+    if (moonrakerOrder) {
+      await handleUpdateOrderStatus(moonrakerOrder.id, "printing", printerName);
+      addToast(`Order ${moonrakerOrder.tracking_code} sent to ${printerName}`, "success");
+    }
+    setMoonrakerOrder(null);
+  }
+
   const addToast = (msg, type = "info") => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
+
+  // Preload both logo variants for instant dark/light switching
+  useEffect(() => {
+    const dark = new Image();
+    dark.src = `${import.meta.env.BASE_URL}logo-dark.svg`;
+    const light = new Image();
+    light.src = `${import.meta.env.BASE_URL}logo-light.svg`;
+  }, []);
 
   useEffect(() => {
     if (darkMode) {
@@ -812,6 +816,10 @@ export default function App() {
       }
 
       const trackingCode = generateTrackingCode();
+      const weightGrams = clientMetrics ? clientMetrics.weightGrams : 0;
+      const calculatedTotal = clientMetrics ? clientMetrics.totalPrice : (weightGrams * (parseFloat(config.price_per_gram) || 3));
+      const formattedNotes = `[PROFILE:${orderLayerHeight}mm | NOZZLE:${orderNozzle}mm | INFILL:${orderInfill}%] ${newOrder.notes || ""}`.trim();
+
       const payload = {
         name: newOrder.name,
         phone: newOrder.phone.replace(/[\s\-()]/g, ""),
@@ -819,13 +827,14 @@ export default function App() {
         ordername: newOrder.orderName,
         material: newOrder.material,
         color: newOrder.color,
-        notes: newOrder.notes,
+        notes: formattedNotes,
         fileurl: urls.join(","),
         filesize: totalSize,
         status: "queued",
         priority: queuedOrdersCount,
-        weightgrams: 0,
+        weightgrams: weightGrams,
         pricepergram: config.price_per_gram,
+        totalprice: calculatedTotal,
         tracking_code: trackingCode
       };
 
@@ -843,8 +852,11 @@ export default function App() {
       } catch (err) { console.error("Could not save tracking code", err); }
 
       setOrderStep(4);
-      setSuccessModal(trackingCode); // Keep this to pass the code to step 4 without modifying state structure too much
+      setSuccessModal(trackingCode);
+      setCopiedTrackingCode(false);
       setNewOrder({ name: newOrder.name, phone: newOrder.phone, email: newOrder.email, orderName: "", material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim(), notes: "", fileName: "" });
+      setClientMetrics(null);
+      setOrderInfill(20);
       setFormErrors({});
       setSelectedFiles([]);
       fetchOrders();
@@ -907,11 +919,21 @@ export default function App() {
     });
   }
 
-  async function handleUpdateWeight(id, weightStr) {
+  async function handleUpdateWeight(id, weightStr, customPrice = null) {
     const weight = parseFloat(weightStr) || 0;
-    const price = weight * (parseFloat(config.price_per_gram) || 0);
+    const price = customPrice !== null && customPrice !== undefined && !isNaN(customPrice)
+      ? parseFloat(customPrice)
+      : weight * (parseFloat(config.price_per_gram) || 0);
     await supabase.from("orders").update({ weightgrams: weight, pricepergram: config.price_per_gram, totalprice: price }).eq("id", id);
     fetchOrders();
+  }
+
+  async function handleUpdatePrice(id, priceStr) {
+    const price = parseFloat(priceStr);
+    if (isNaN(price)) return;
+    await supabase.from("orders").update({ totalprice: Math.max(0, price) }).eq("id", id);
+    fetchOrders();
+    addToast(`Updated order price to ${price.toFixed(2)} EGP`, "success");
   }
 
   function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
@@ -921,7 +943,8 @@ export default function App() {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "ID,Name,Email,Phone,Order Name,Status,Material,Color,Weight,Total Price,Tracking Code,Created At\n"
       + getSortedOrders().map(o => {
-          return `"${o.id}","${o.name || ''}","${o.email || ''}","${o.phone || ''}","${o.ordername || ''}","${o.status}","${o.material || ''}","${o.color || ''}",${o.weightgrams || 0},${(o.weightgrams || 0) * (config.price_per_gram || 0)},"${o.tracking_code || ''}","${o.createdat}"`;
+          const finalP = o.totalprice !== null && o.totalprice !== undefined ? o.totalprice : ((o.weightgrams || 0) * (config.price_per_gram || 0));
+          return `"${o.id}","${o.name || ''}","${o.email || ''}","${o.phone || ''}","${o.ordername || ''}","${o.status}","${o.material || ''}","${o.color || ''}",${o.weightgrams || 0},${finalP},"${o.tracking_code || ''}","${o.createdat}"`;
         }).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -992,7 +1015,8 @@ export default function App() {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-page)' }}>
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/></div>
-        <div className="card" style={{ maxWidth: 420, width: "100%", position: "relative", zIndex: 10 }}>
+        <div className="card" style={{ maxWidth: 420, width: "100%", position: "relative", zIndex: 10, textAlign: "center" }}>
+          <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt="Etba3ly" className="brand-logo-img admin-logo" style={{ height: 42, margin: '0 auto 20px', display: 'block' }} />
           <h2 style={{ fontSize: 26, marginBottom: 8 }}>Admin Access</h2>
           <p style={{ fontSize: 14, marginBottom: 24 }}>Log in with your Supabase credentials.</p>
           <div style={{ marginBottom: 16 }}><input placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} /></div>
@@ -1012,7 +1036,8 @@ export default function App() {
       <div className="admin-container">
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/><div className="bg-orb bg-orb-3"/></div>
         <div style={{ position: "relative", zIndex: 10 }}>
-          <div className="admin-header" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          <div className="admin-header" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
+            <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt="Etba3ly" className="brand-logo-img admin-logo" style={{ height: 34, display: 'block' }} />
             <h1 style={{ fontSize: 36, margin: 0, flex: 1 }}>Command Center</h1>
             <button className="btn btn-glass" onClick={exportCSV}>Export CSV</button>
             <button className="btn btn-glass" onClick={handleAdminLogout}>Sign Out</button>
@@ -1033,25 +1058,60 @@ export default function App() {
               </div>
               {/* Printer Status Dashboard */}
               <div className="printer-dashboard card" style={{ marginBottom: 24 }}>
-                <h3 style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22, color: "var(--accent)" }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                  Printer Status
-                </h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                  <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22, color: "var(--accent)" }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    Printer Status & Telemetry
+                  </h3>
+                  <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>Tracks Website Orders & Direct USB Flash Drives</span>
+                </div>
                 <div className="printer-status-grid">
                   {PRINTERS.map(printer => {
                     const activeOrder = orders.find(o => o.status === "printing" && getPrinterFromNotes(o.notes) === printer);
+                    const externalJob = externalPrinterStates[printer];
+                    const isWorking = Boolean(activeOrder || (externalJob && externalJob.status === "working"));
+                    const isExternal = !activeOrder && externalJob && externalJob.status === "working";
+
                     return (
-                      <div key={printer} className={`printer-status-card ${activeOrder ? 'working' : 'resting'}`}>
+                      <div key={printer} className={`printer-status-card ${isWorking ? (isExternal ? 'external-working' : 'working') : 'resting'}`}>
                         <div className="printer-status-indicator">
-                          <div className={`printer-dot ${activeOrder ? 'active' : 'idle'}`} />
+                          <div className={`printer-dot ${isWorking ? (isExternal ? 'external' : 'active') : 'idle'}`} />
                           <span className="printer-name">{printer}</span>
                         </div>
-                        <div className="printer-status-label">{activeOrder ? '⚙️ Working' : '✅ Resting'}</div>
+                        <div className="printer-status-label">
+                          {activeOrder ? 'Working (Website Job)' : isExternal ? 'Working (Direct USB)' : 'Resting / Ready'}
+                        </div>
                         {activeOrder && (
                           <div className="printer-current-order">
                             Printing: <strong>{activeOrder.ordername || "Untitled"}</strong> — {activeOrder.name}
                           </div>
                         )}
+                        {isExternal && (
+                          <div className="printer-current-order" style={{ color: "var(--accent)" }}>
+                            Direct Print: <strong>{externalJob.jobName || "Flash Drive Job"}</strong>
+                          </div>
+                        )}
+                        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {isExternal ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-glass"
+                              style={{ padding: "4px 10px", fontSize: 11 }}
+                              onClick={() => handleClearExternalJob(printer)}
+                            >
+                              Clear USB Job
+                            </button>
+                          ) : !activeOrder ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-glass"
+                              style={{ padding: "4px 10px", fontSize: 11 }}
+                              onClick={() => handleSetExternalJob(printer)}
+                            >
+                              Log USB Print
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })}
@@ -1109,10 +1169,17 @@ export default function App() {
                             {o.ordername || "Untitled"}
                             <span style={{ fontSize: 10, background: o.status === "done" ? "var(--status-done)" : o.status === "printing" ? "var(--status-printing)" : "var(--status-queued)", color: "#fff", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700 }}>{o.status.toUpperCase()}</span>
                             {o.tracking_code && <span style={{ fontSize: 12, color: "var(--accent)", fontWeight: 700, fontFamily: "monospace" }}>{o.tracking_code}</span>}
-                            {o.status === "printing" && getPrinterFromNotes(o.notes) && <span style={{ fontSize: 10, background: "rgba(0,122,255,0.1)", color: "var(--status-printing)", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700, border: "1px solid rgba(0,122,255,0.2)" }}>🖨️ {getPrinterFromNotes(o.notes)}</span>}
+                            {o.status === "printing" && getPrinterFromNotes(o.notes) && <span style={{ fontSize: 10, background: "rgba(0,122,255,0.1)", color: "var(--status-printing)", padding: "3px 10px", borderRadius: "var(--radius-full)", fontWeight: 700, border: "1px solid rgba(0,122,255,0.2)" }}>[PRINTER: {getPrinterFromNotes(o.notes)}]</span>}
                           </div>
                           <div style={{ color: "var(--text-secondary)", marginTop: 6, fontSize: 13 }}>{o.name} &bull; {o.phone}{o.email ? ` &bull; ${o.email}` : ""}</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{o.material} ({o.color})</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <span>{o.material} ({o.color})</span>
+                            {o.notes && o.notes.includes("[INFILL:") && (
+                              <span style={{ fontSize: 11, background: "rgba(255, 128, 0, 0.12)", color: "var(--accent)", padding: "2px 8px", borderRadius: "var(--radius-full)", fontWeight: 700 }}>
+                                {o.notes.match(/\[INFILL:([^\]]+)\]/)?.[1] || ""} Infill
+                              </span>
+                            )}
+                          </div>
                           {getCleanNotes(o.notes) && <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4, fontStyle: "italic" }}>Notes: {getCleanNotes(o.notes)}</div>}
                           <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 6 }}>
                             {o.createdat && <span>{new Date(o.createdat).toLocaleString()} &bull; </span>}
@@ -1139,8 +1206,26 @@ export default function App() {
                               {PRINTERS.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                           )}
+                          {Boolean(o.fileurl && o.fileurl.toLowerCase().includes('.stl')) && (
+                            <button
+                              type="button"
+                              onClick={() => setAdminSlicerOrder(o)}
+                              className="btn btn-accent"
+                              style={{ padding: "8px 16px", fontSize: 12 }}
+                            >
+                              Inspect & Slice 3D
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMoonrakerForOrder(o)}
+                            className="btn btn-glass"
+                            style={{ padding: "8px 16px", fontSize: 12 }}
+                          >
+                            Send to Printer
+                          </button>
                           {o.fileurl && o.fileurl.split(',').map((url, idx, arr) => (
-                            <a key={idx} href={url} download target="_blank" rel="noreferrer" className="btn btn-accent" style={{ padding: "8px 16px", fontSize: 12 }}>
+                            <a key={idx} href={url} download target="_blank" rel="noreferrer" className="btn btn-glass" style={{ padding: "8px 16px", fontSize: 12 }}>
                               Download {arr.length > 1 ? idx + 1 : ""}
                             </a>
                           ))}
@@ -1148,13 +1233,36 @@ export default function App() {
                           <button onClick={() => handleDeleteOrder(o.id)} style={{ padding: "8px 16px", background: "#FF3B30", color: "#fff", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Delete</button>
                         </div>
                       </div>
-                      <div className="admin-order-footer">
+                      <div className="admin-order-footer" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <label style={{ margin: 0, whiteSpace: "nowrap" }}>Weight (g)</label>
-                          <input type="number" defaultValue={o.weightgrams || ""} placeholder="0" onBlur={(e) => handleUpdateWeight(o.id, e.target.value)} style={{ width: 90, padding: "8px 12px", fontSize: 13 }} />
+                          <label style={{ margin: 0, whiteSpace: "nowrap", fontSize: 12 }}>Weight (g)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            key={`w_${o.id}_${o.weightgrams}`}
+                            defaultValue={o.weightgrams || ""}
+                            placeholder="0"
+                            onBlur={(e) => handleUpdateWeight(o.id, e.target.value)}
+                            style={{ width: 85, padding: "6px 10px", fontSize: 13 }}
+                          />
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Rate: <strong style={{ color: "var(--text-primary)" }}>{config.price_per_gram} EGP/g</strong></div>
-                        <div style={{ fontSize: 16, fontWeight: 900, color: "var(--accent)", marginLeft: "auto" }}>{calculatedPrice.toFixed(2)} EGP</div>
+                        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                          Rate: <strong style={{ color: "var(--text-primary)" }}>{config.price_per_gram} EGP/g</strong>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+                          <label style={{ margin: 0, whiteSpace: "nowrap", fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>Price (EGP)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            key={`p_${o.id}_${o.totalprice}`}
+                            defaultValue={o.totalprice !== null && o.totalprice !== undefined ? Number(o.totalprice).toFixed(2) : calculatedPrice.toFixed(2)}
+                            placeholder="0.00"
+                            onBlur={(e) => handleUpdatePrice(o.id, e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleUpdatePrice(o.id, e.target.value)}
+                            style={{ width: 110, padding: "6px 10px", fontSize: 14, fontWeight: 900, color: "var(--accent)", textAlign: "right" }}
+                            title="Click to edit final order price"
+                          />
+                        </div>
                       </div>
                     </div>
                     </div>
@@ -1273,6 +1381,32 @@ export default function App() {
                   <div style={{ flex: 1 }}><label>Material</label><input value={editingOrder.material || ""} onChange={e => setEditingOrder({...editingOrder, material: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
                   <div style={{ flex: 1 }}><label>Color</label><input value={editingOrder.color || ""} onChange={e => setEditingOrder({...editingOrder, color: e.target.value})} style={{ width: '100%', marginBottom: 16 }} /></div>
                 </div>
+                <div className="form-row">
+                  <div style={{ flex: 1 }}>
+                    <label>Weight (grams)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editingOrder.weightgrams ?? ""}
+                      onChange={e => {
+                        const w = parseFloat(e.target.value) || 0;
+                        const autoP = w * (parseFloat(config.price_per_gram) || 0);
+                        setEditingOrder({ ...editingOrder, weightgrams: w, totalprice: autoP });
+                      }}
+                      style={{ width: '100%', marginBottom: 16 }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label>Total Price (EGP)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={editingOrder.totalprice ?? ""}
+                      onChange={e => setEditingOrder({ ...editingOrder, totalprice: parseFloat(e.target.value) || 0 })}
+                      style={{ width: '100%', marginBottom: 16, fontWeight: 700, color: 'var(--accent)' }}
+                    />
+                  </div>
+                </div>
                 <div>
                   <label>Notes</label>
                   <textarea rows="3" value={getCleanNotes(editingOrder.notes)} onChange={e => setEditingOrder({...editingOrder, notes: setPrinterInNotes(e.target.value, getPrinterFromNotes(editingOrder.notes))})} style={{ width: '100%', marginBottom: 16 }} />
@@ -1343,6 +1477,59 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* Admin 3D Slicer Modal */}
+          <AdminSlicerModal
+            isOpen={Boolean(adminSlicerOrder)}
+            onClose={() => setAdminSlicerOrder(null)}
+            order={adminSlicerOrder}
+            pricePerGram={config.price_per_gram}
+            onUpdateWeightPrice={(id, weight, price) => {
+              handleUpdateWeight(id, weight, price);
+              addToast(`Updated order to ${weight}g & ${Number(price).toFixed(2)} EGP`, "success");
+              setAdminSlicerOrder(null);
+            }}
+            onOpenMoonraker={(order, gcode) => {
+              setAdminSlicerOrder(null);
+              handleOpenMoonrakerForOrder(order, gcode);
+            }}
+          />
+
+          {/* Moonraker Hardware Dispatch Modal */}
+          <MoonrakerDispatchModal
+            isOpen={Boolean(moonrakerOrder)}
+            onClose={() => setMoonrakerOrder(null)}
+            order={moonrakerOrder}
+            gcodeString={moonrakerGcode}
+            fileName={moonrakerOrder ? (moonrakerOrder.ordername || 'job') : 'model'}
+            onDispatchSuccess={handleMoonrakerDispatchSuccess}
+          />
+
+          {/* External USB Print Prompt Modal */}
+          {externalPromptPrinter && (
+            <div className="modal-overlay" style={{ zIndex: 10000 }} onClick={() => setExternalPromptPrinter(null)}>
+              <div className="modal-content" style={{ maxWidth: 440, width: "100%", padding: 28, textAlign: "left" }} onClick={e => e.stopPropagation()}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: 18, fontWeight: 800 }}>Log Direct USB Print for {externalPromptPrinter}</h3>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
+                  Track hardware usage when running a print directly from a USB flash drive or physical touchscreen.
+                </p>
+                <div style={{ marginBottom: 20 }}>
+                  <label>Job or Part Description</label>
+                  <input
+                    value={externalJobInput}
+                    onChange={e => setExternalJobInput(e.target.value)}
+                    placeholder="e.g. Flash Drive: Mechanical Gear"
+                    autoFocus
+                    onKeyDown={e => e.key === "Enter" && handleSaveExternalJob()}
+                  />
+                </div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button type="button" className="btn btn-glass" onClick={() => setExternalPromptPrinter(null)}>Cancel</button>
+                  <button type="button" className="btn btn-accent" onClick={handleSaveExternalJob}>Mark as Working</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1351,7 +1538,7 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════
   // PUBLIC WEBSITE
   // ═══════════════════════════════════════════════════════════
-  const brandName = config.brand_name || "JUST print";
+  const brandName = (config.brand_name && config.brand_name !== "JUST print" && config.brand_name !== "PrintQueue") ? config.brand_name : "Etba3ly";
 
   return (
     <>
@@ -1386,10 +1573,12 @@ export default function App() {
 
       {/* Navigation */}
       <nav className="header">
-        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
+        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)} aria-label={brandName}>
+          <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt={brandName} className="brand-logo-img nav-logo" />
+        </a>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
+          <button className="theme-toggle mobile-theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
             {darkMode ? <SunIcon /> : <MoonIcon />}
           </button>
           
@@ -1401,6 +1590,9 @@ export default function App() {
         </div>
 
         <div className={`nav-links ${mobileMenuOpen ? "nav-open" : ""}`}>
+          <button className="theme-toggle desktop-theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" title="Toggle Light/Dark Theme">
+            {darkMode ? <SunIcon /> : <MoonIcon />}
+          </button>
           <a href="#why" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
           <a href="#full-gallery" onClick={() => setMobileMenuOpen(false)}>Gallery</a>
           <a href="#order" onClick={() => setMobileMenuOpen(false)}>Order</a>
@@ -1504,12 +1696,37 @@ export default function App() {
                       </select>
                     </div>
                   </div>
+                  <div className="form-row">
+                    <div>
+                      <label>Print Quality / Profile</label>
+                      <select value={orderLayerHeight} onChange={e => {
+                        const lh = parseFloat(e.target.value);
+                        setOrderLayerHeight(lh);
+                        if (lh <= 0.10) setOrderNozzle(0.20);
+                        else setOrderNozzle(0.40);
+                      }}>
+                        <option value={0.20}>0.20 mm Standard (0.4 Nozzle - Balanced)</option>
+                        <option value={0.10}>0.10 mm Ultra-Fine (0.2 Nozzle - High Precision)</option>
+                        <option value={0.12}>0.12 mm High Detail (0.4 Nozzle)</option>
+                        <option value={0.28}>0.28 mm Draft / Rapid (0.4 Nozzle)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Infill Density</label>
+                      <select value={orderInfill} onChange={e => setOrderInfill(parseInt(e.target.value, 10))}>
+                        <option value={20}>Standard (20%) - Recommended for Most Parts</option>
+                        <option value={50}>High Strength (50%) - Functional & Heavy Duty</option>
+                        <option value={15}>Light / Draft (15%) - Rapid Prototyping</option>
+                        <option value={100}>Solid (100%) - Maximum Structural Density</option>
+                      </select>
+                    </div>
+                  </div>
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <label>Notes / Special Instructions</label>
                       <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600 }}>{newOrder.notes.length}/500</span>
                     </div>
-                    <textarea value={newOrder.notes} maxLength={500} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Infill %, orientation, special requests..." rows="3" />
+                    <textarea value={newOrder.notes} maxLength={500} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} placeholder="Orientation, special tolerances, requests..." rows="3" />
                   </div>
                   <div style={{ marginBottom: 24 }}>
                     <label>STL or ZIP File(s) *</label>
@@ -1526,14 +1743,87 @@ export default function App() {
                     {fileError && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{fileError}</div>}
                     {formErrors.file && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{formErrors.file}</div>}
                   </div>
+
+                  {/* 3D STL Object Preview & Slicer Estimation */}
+                  {Boolean(selectedFiles.find(f => f.name.toLowerCase().endsWith(".stl"))) && (
+                    <div style={{ marginBottom: 24 }}>
+                      <label>3D Model & Build Plate Preview</label>
+                      <STLViewer
+                        file={selectedFiles.find(f => f.name.toLowerCase().endsWith(".stl"))}
+                        infillPercent={orderInfill}
+                        layerHeight={orderLayerHeight}
+                        nozzleSize={orderNozzle}
+                        materialKey={newOrder.material || "pla"}
+                        pricePerGram={config.price_per_gram}
+                        onMetricsChange={setClientMetrics}
+                        height="260px"
+                      />
+
+                      {clientMetrics && (
+                        <div className="print-estimate-card">
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--accent)" }}>
+                              Client Print Estimate
+                            </span>
+                            <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: "var(--radius-full)", background: clientMetrics.fitsBed ? "rgba(52, 199, 89, 0.15)" : "rgba(255, 59, 48, 0.15)", color: clientMetrics.fitsBed ? "var(--status-done)" : "#FF3B30", fontWeight: 700, border: `1px solid ${clientMetrics.fitsBed ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}` }}>
+                              {clientMetrics.fitsBed ? "Fits Centauri Bed (256x256mm)" : "Exceeds Bed Envelope"}
+                            </span>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12 }}>
+                            <div>
+                              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Weight</div>
+                              <div style={{ fontSize: 16, fontWeight: 800 }}>{(clientMetrics.weightGrams ?? clientMetrics.filamentWeightGrams ?? 0)} g</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Time</div>
+                              <div style={{ fontSize: 16, fontWeight: 800 }}>{clientMetrics.printTimeFormatted}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Est. Price</div>
+                              <div style={{ fontSize: 18, fontWeight: 900, color: "var(--accent)" }}>{clientMetrics.totalPrice.toFixed(2)} EGP</div>
+                            </div>
+                            {clientMetrics.metrics && (
+                              <div>
+                                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Dimensions</div>
+                                <div style={{ fontSize: 12, fontWeight: 700 }}>{clientMetrics.metrics.width} x {clientMetrics.metrics.depth} x {clientMetrics.metrics.height} mm</div>
+                              </div>
+                            )}
+                            {clientMetrics.filamentLengthMeters && (
+                              <div>
+                                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Filament & Layers</div>
+                                <div style={{ fontSize: 12, fontWeight: 700 }}>{clientMetrics.filamentLengthMeters}m &bull; {clientMetrics.numLayers} L</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div style={{
+                        marginTop: 10,
+                        padding: "10px 14px",
+                        fontSize: 11,
+                        lineHeight: 1.5,
+                        color: "var(--text-tertiary)",
+                        background: "rgba(128,128,128,0.06)",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid rgba(128,128,128,0.12)"
+                      }}>
+                        * This is a rough estimate based on the uploaded model geometry.
+                        Actual weight, print time, and final price may vary depending on the
+                        slicer profile, orientation, support structures, and quality settings
+                        selected by our print team. You will be notified of the confirmed
+                        price before printing begins.
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                    <button className="btn btn-glass" onClick={() => setOrderStep(1)}>← Back</button>
+                    <button className="btn btn-glass" onClick={() => setOrderStep(1)}>Back</button>
                     <button className="btn btn-accent" onClick={() => {
                       const errors = {};
                       if (selectedFiles.length === 0) errors.file = "Please upload at least one STL or ZIP file.";
                       setFormErrors(errors);
                       if (Object.keys(errors).length === 0) setOrderStep(3);
-                    }}>Review Order →</button>
+                    }}>Review Order</button>
                   </div>
                 </div>
               )}
@@ -1541,16 +1831,71 @@ export default function App() {
               {orderStep === 3 && (
                 <div className="animate-in">
                   <h3 style={{ marginBottom: 16 }}>Order Summary</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24, padding: 20, background: 'rgba(255,255,255,0.4)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)' }}>
-                    <div><strong>Name:</strong> {newOrder.name}</div>
-                    <div><strong>Phone:</strong> {newOrder.phone}</div>
-                    <div><strong>Email:</strong> {newOrder.email}</div>
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-glass)' }}><strong>Project:</strong> {newOrder.orderName || "Untitled"}</div>
-                    <div><strong>Material:</strong> {newOrder.material} ({newOrder.color})</div>
-                    <div><strong>Files:</strong> {newOrder.fileName}</div>
+                  <div className="review-summary-card">
+                    <div className="review-item">
+                      <span className="review-item-label">Client Name</span>
+                      <span className="review-item-value">{newOrder.name}</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Phone</span>
+                      <span className="review-item-value">{newOrder.phone}</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Email</span>
+                      <span className="review-item-value">{newOrder.email}</span>
+                    </div>
+                    <div style={{ margin: "6px 0", borderTop: "1px solid var(--border-glass)" }}></div>
+                    <div className="review-item">
+                      <span className="review-item-label">Project</span>
+                      <span className="review-item-value">{newOrder.orderName || "Untitled"}</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Material & Color</span>
+                      <span className="review-item-value">{newOrder.material?.toUpperCase()} ({newOrder.color})</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Print Profile</span>
+                      <span className="review-item-value">{orderLayerHeight} mm ({orderNozzle} mm Nozzle)</span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">Infill Density</span>
+                      <span className="review-item-value">
+                        {orderInfill}% {orderInfill === 20 ? "(Standard)" : orderInfill === 50 ? "(High Strength)" : orderInfill === 100 ? "(Solid)" : "(Draft)"}
+                      </span>
+                    </div>
+                    <div className="review-item">
+                      <span className="review-item-label">File Name</span>
+                      <span className="review-item-value" style={{ wordBreak: "break-all" }}>{newOrder.fileName}</span>
+                    </div>
+
+                    {clientMetrics && (
+                      <>
+                        <div style={{ margin: "6px 0", borderTop: "1px solid var(--border-glass)" }}></div>
+                        <div className="review-item">
+                          <span className="review-item-label">Est. Weight & Time</span>
+                          <span className="review-item-value">
+                            ~{(clientMetrics.weightGrams ?? clientMetrics.filamentWeightGrams ?? 0)} g &bull; ~{clientMetrics.printTimeFormatted}
+                          </span>
+                        </div>
+                        {clientMetrics.metrics && (
+                          <div className="review-item">
+                            <span className="review-item-label">Dimensions</span>
+                            <span className="review-item-value">
+                              {clientMetrics.metrics.width} x {clientMetrics.metrics.depth} x {clientMetrics.metrics.height} mm
+                            </span>
+                          </div>
+                        )}
+                        <div className="review-item" style={{ marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--border-glass)" }}>
+                          <span className="review-item-label" style={{ fontSize: 15, fontWeight: 700 }}>Est. Total</span>
+                          <span style={{ fontSize: 20, fontWeight: 900, color: "var(--accent)" }}>
+                            {clientMetrics.totalPrice.toFixed(2)} EGP
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                    <button className="btn btn-glass" onClick={() => setOrderStep(2)}>← Back</button>
+                    <button className="btn btn-glass" onClick={() => setOrderStep(2)}>Back</button>
                     <button className="btn btn-primary" style={{ opacity: isUploading ? 0.7 : 1 }} disabled={isUploading} onClick={handleOrderSubmit}>
                       {isUploading ? "Uploading..." : "Submit Order"}
                     </button>
@@ -1567,12 +1912,20 @@ export default function App() {
                   <p>Your files have been securely uploaded to our print queue.</p>
                   <p>Save this tracking code to check your order status:</p>
                   
-                  <div className="tracking-code-display" onClick={async () => { 
-                    await copyToClipboard(successModal); 
-                    addToast("Tracking code copied to clipboard!", "success");
-                  }} style={{ margin: "24px auto", maxWidth: 340, cursor: "pointer" }}>
+                  <div 
+                    className={`tracking-code-display ${copiedTrackingCode ? 'copied' : ''}`} 
+                    onClick={async () => { 
+                      const success = await copyToClipboard(successModal); 
+                      if (success !== false) {
+                        setCopiedTrackingCode(true);
+                        addToast("Tracking code copied to clipboard!", "success");
+                        setTimeout(() => setCopiedTrackingCode(false), 3000);
+                      }
+                    }} 
+                    style={{ margin: "24px auto", maxWidth: 340, cursor: "pointer" }}
+                  >
                     <span className="code">{successModal}</span>
-                    <span className="copy-hint">Tap to copy</span>
+                    <span className="copy-hint">{copiedTrackingCode ? "Copied to clipboard!" : "Tap to copy"}</span>
                   </div>
                   
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
@@ -1649,11 +2002,6 @@ export default function App() {
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
-          <FloatingIcons icons={[
-            { src: '1.png', size: 140, top: '15%', left: '-25%', delay: '0s', duration: '6s' },
-            { src: '2.png', size: 100, bottom: '20%', right: '-25%', delay: '1s', duration: '7s', reverse: true },
-            { src: '20.png', size: 80, top: '5%', right: '-10%', delay: '2s', duration: '5s' }
-          ]} />
           <h1>{config.hero_title}</h1>
           <p>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -1669,10 +2017,6 @@ export default function App() {
 
         {/* ── WHY US ── */}
         <section id="why" className="section-container reveal">
-          <FloatingIcons icons={[
-            { src: '5.png', size: 120, top: '5%', right: '-25%', delay: '0.5s', duration: '6.5s' },
-            { src: '6.png', size: 90, bottom: '10%', left: '-25%', delay: '1.5s', duration: '5.5s', reverse: true }
-          ]} />
           <h2>{config.why_title}</h2>
           <p>{config.why_text}</p>
           <div className="feature-cards">
@@ -1692,10 +2036,6 @@ export default function App() {
 
         {/* -- GALLERY -- */}
         <section id="gallery" className="gallery-section reveal">
-          <FloatingIcons icons={[
-            { src: '22.png', size: 110, top: '20%', left: '-25%', delay: '1s', duration: '6s' },
-            { src: '7.png', size: 85, bottom: '15%', right: '-25%', delay: '0s', duration: '7s', reverse: true }
-          ]} />
           <div style={{ textAlign: "center", marginBottom: 56 }}>
             <h2>Our Work</h2>
             <p style={{ maxWidth: 500, margin: "0 auto" }}>Some of the parts we've printed. Your project could be next.</p>
@@ -1828,7 +2168,9 @@ export default function App() {
       <footer className="site-footer">
         <div className="footer-grid">
           <div>
-            <div className="footer-brand"><div className="dot" /> {brandName}</div>
+            <div className="footer-brand">
+              <img src={`${import.meta.env.BASE_URL}logo-dark.svg`} alt={brandName} className="footer-logo-img footer-logo" />
+            </div>
             <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 14, margin: 0 }}>Student-powered 3D printing. Fast, affordable, on campus.</p>
           </div>
           <div className="footer-col">
