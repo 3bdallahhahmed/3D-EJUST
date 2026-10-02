@@ -267,11 +267,6 @@ body {
   transform: scale(1.03);
 }
 
-/* Light theme: Invert white artwork to crisp dark */
-[data-theme="light"] .brand-logo-img {
-  filter: brightness(0) opacity(0.88);
-}
-
 .logo-dot {
   width: 10px; height: 10px;
   background: var(--accent-gradient);
