@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import {
   PRINTER_PROFILES,
+  autoOrientForPrinting,
   estimatePrintMetrics,
   sliceMesh,
   generateElegooGcode
@@ -282,6 +283,10 @@ const STLViewer = forwardRef(function STLViewer({
   function applyGeometry(geo) {
     clearModel();
     geo.computeVertexNormals();
+
+    // Auto-orient for best FDM print orientation (minimise height, maximise bed contact)
+    autoOrientForPrinting(geo);
+
     geometryRef.current = geo;
 
     // Center horizontally and ground base on bed (y = 0)

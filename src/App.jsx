@@ -1848,6 +1848,22 @@ export default function App() {
                           </div>
                         </div>
                       )}
+                      <div style={{
+                        marginTop: 10,
+                        padding: "10px 14px",
+                        fontSize: 11,
+                        lineHeight: 1.5,
+                        color: "var(--text-tertiary)",
+                        background: "rgba(128,128,128,0.06)",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid rgba(128,128,128,0.12)"
+                      }}>
+                        * This is a rough estimate based on the uploaded model geometry.
+                        Actual weight, print time, and final price may vary depending on the
+                        slicer profile, orientation, support structures, and quality settings
+                        selected by our print team. You will be notified of the confirmed
+                        price before printing begins.
+                      </div>
                     </div>
                   )}
 

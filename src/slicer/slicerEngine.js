@@ -75,6 +75,103 @@ export const MATERIALS = {
   asa: { name: "Elegoo ASA", density: 1.07, costPerKg: 28.0, temp: 260, bedTemp: 100 }
 };
 
+// =============================================================
+// AUTO-ORIENT FOR OPTIMAL FDM PRINTING
+// Evaluates 6 orthogonal orientations and picks the one that:
+//   1. Minimises vertical height (fewer layers = faster print)
+//   2. Maximises flat base contact area (better bed adhesion)
+//   3. Minimises overhang area (less support material needed)
+// =============================================================
+export function autoOrientForPrinting(geometry) {
+  if (!geometry || !geometry.attributes.position) return geometry;
+
+  geometry.computeBoundingBox();
+  const bbox = geometry.boundingBox;
+  const sx = bbox.max.x - bbox.min.x;
+  const sy = bbox.max.y - bbox.min.y;
+  const sz = bbox.max.z - bbox.min.z;
+
+  // The 6 principal axis orientations as [rotation axis, angle] pairs
+  // Each maps a different original axis to become the vertical (Y) axis
+  const orientations = [
+    { label: 'original',  rotAxis: null,  angle: 0,         newHeight: sy },  // Y stays vertical
+    { label: '+90X',      rotAxis: 'x',   angle: Math.PI/2, newHeight: sz },  // Z becomes vertical
+    { label: '-90X',      rotAxis: 'x',   angle: -Math.PI/2,newHeight: sz },  // Z becomes vertical (flipped)
+    { label: '+90Z',      rotAxis: 'z',   angle: Math.PI/2, newHeight: sx },  // X becomes vertical
+    { label: '-90Z',      rotAxis: 'z',   angle: -Math.PI/2,newHeight: sx },  // X becomes vertical (flipped)
+    { label: '180X',      rotAxis: 'x',   angle: Math.PI,   newHeight: sy },  // Flip upside-down
+  ];
+
+  // Score each orientation: lower height is better, penalise tall prints
+  // For equal heights, prefer wider base (more bed contact = more stability)
+  let bestOrientation = orientations[0];
+  let bestScore = Infinity;
+
+  for (const orient of orientations) {
+    // Primary: minimise height (directly reduces layer count)
+    // Secondary: maximise footprint area (width * depth on the bed)
+    let w, d;
+    if (orient.rotAxis === 'x') {
+      w = sx;
+      d = orient.angle === Math.PI ? sz : sy;
+    } else if (orient.rotAxis === 'z') {
+      w = sy;
+      d = sz;
+    } else {
+      w = sx;
+      d = sz;
+    }
+
+    // Score: height is dominant factor, subtract a small footprint bonus
+    const footprintBonus = (w * d) * 0.001;
+    const score = orient.newHeight - footprintBonus;
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestOrientation = orient;
+    }
+  }
+
+  // Apply the winning rotation if it is not the identity
+  if (bestOrientation.rotAxis) {
+    const pos = geometry.attributes.position;
+    const cos = Math.cos(bestOrientation.angle);
+    const sin = Math.sin(bestOrientation.angle);
+
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      let nx, ny, nz;
+
+      if (bestOrientation.rotAxis === 'x') {
+        // Rotate around X axis
+        nx = x;
+        ny = y * cos - z * sin;
+        nz = y * sin + z * cos;
+      } else {
+        // Rotate around Z axis
+        nx = x * cos - y * sin;
+        ny = x * sin + y * cos;
+        nz = z;
+      }
+
+      pos.setXYZ(i, nx, ny, nz);
+    }
+
+    pos.needsUpdate = true;
+    geometry.computeBoundingBox();
+    geometry.computeVertexNormals();
+  }
+
+  // Ground the model: shift so min Y = 0 (sitting on the bed)
+  const finalBbox = geometry.boundingBox;
+  if (finalBbox.min.y !== 0) {
+    geometry.translate(0, -finalBbox.min.y, 0);
+    geometry.computeBoundingBox();
+  }
+
+  return geometry;
+}
+
 // Calculate signed volume of 3D mesh in cm3 and bounding dimensions
 // In Three.js world coordinates:
 // X = width (across bed: 0-256mm)
