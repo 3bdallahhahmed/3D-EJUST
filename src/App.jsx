@@ -521,6 +521,11 @@ export default function App() {
   }, [darkMode]);
 
   useEffect(() => {
+    const title = (config.brand_name && config.brand_name !== "JUST print" && config.brand_name !== "PrintQueue") ? config.brand_name : "Etba3ly";
+    document.title = title;
+  }, [config.brand_name]);
+
+  useEffect(() => {
     if (config.materials && config.colors && !newOrder.material) {
       setNewOrder(p => ({ ...p, material: config.materials.split(',')[0].trim(), color: config.colors.split(',')[0].trim() }));
     }
@@ -609,7 +614,31 @@ export default function App() {
 
   async function fetchConfig() {
     const { data, error } = await supabase.from("site_config").select("*").eq("id", 1).single();
-    if (data && !error) setConfig(data);
+    if (data && !error) {
+      const isLegacy =
+        !data.hero_title ||
+        data.hero_title.includes("F1") ||
+        data.brand_name === "JUST print" ||
+        data.brand_name === "PrintQueue" ||
+        (data.why_title && data.why_title.includes("Speed"));
+
+      if (isLegacy) {
+        setConfig(prev => ({
+          ...DEFAULT_CONFIG,
+          ...data,
+          brand_name: "Etba3ly",
+          hero_title: DEFAULT_CONFIG.hero_title,
+          hero_subtitle: DEFAULT_CONFIG.hero_subtitle,
+          why_title: DEFAULT_CONFIG.why_title,
+          why_text: DEFAULT_CONFIG.why_text,
+          materials: DEFAULT_CONFIG.materials,
+          colors: DEFAULT_CONFIG.colors,
+          price_per_gram: data.price_per_gram || DEFAULT_CONFIG.price_per_gram,
+        }));
+      } else {
+        setConfig(data);
+      }
+    }
   }
 
 
@@ -1989,8 +2018,8 @@ export default function App() {
               <h3 style={{ marginBottom: 16 }}>Need Help?</h3>
               <p style={{ fontSize: 14, marginBottom: 24 }}>Contact us directly for support or special requests.</p>
               <div className="contact-buttons" style={{ justifyContent: "center" }}>
-                <a href="https://wa.me/" target="_blank" rel="noreferrer" className="btn btn-accent"><WhatsAppIcon /> WhatsApp</a>
-                <a href="mailto:hello@justprint.com" className="btn btn-glass"><EmailIcon /> Email Us</a>
+                <a href={config.whatsapp_number ? `https://wa.me/${config.whatsapp_number.replace(/[^0-9]/g, '')}` : "https://wa.me/"} target="_blank" rel="noreferrer" className="btn btn-accent"><WhatsAppIcon /> WhatsApp</a>
+                <a href={`mailto:${config.email_address || "support@etba3ly.store"}`} className="btn btn-glass"><EmailIcon /> Email Us</a>
               </div>
             </div>
           </section>
@@ -2002,8 +2031,8 @@ export default function App() {
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
-          <h1>{config.hero_title}</h1>
-          <p>{config.hero_subtitle}</p>
+          <h1 style={{ whiteSpace: "pre-line" }}>{config.hero_title}</h1>
+          <p style={{ whiteSpace: "pre-line" }}>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <a href="#order" className="btn btn-accent">Place an Order</a>
             {config.whatsapp_number && (
@@ -2089,7 +2118,7 @@ export default function App() {
                   <EmailIcon /> Email Us
                 </a>
               ) : (
-                <a href="mailto:hello@justprint.com" className="btn btn-glass" style={{ gap: 10 }}>
+                <a href="mailto:support@etba3ly.store" className="btn btn-glass" style={{ gap: 10 }}>
                   <EmailIcon /> Email Us
                 </a>
               )}
@@ -2193,7 +2222,7 @@ export default function App() {
                   <>
                     <a href="https://instagram.com" target="_blank" rel="noreferrer" className="social-link"><InstagramIcon /></a>
                     <a href="https://wa.me/" target="_blank" rel="noreferrer" className="social-link"><WhatsAppIcon /></a>
-                    <a href="mailto:hello@justprint.com" className="social-link"><EmailIcon /></a>
+                    <a href="mailto:support@etba3ly.store" className="social-link"><EmailIcon /></a>
                   </>
                 )}
               </div>
