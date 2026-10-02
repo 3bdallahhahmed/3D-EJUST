@@ -96,6 +96,43 @@ function SceneLoader() {
   );
 }
 
+/* ── Gear Shape (3D printing icon) ── */
+function GearShape({ position, scale = 1, color = "#FF8000" }) {
+  const meshRef = useRef();
+  const gearGeo = useMemo(() => {
+    const shape = new THREE.Shape();
+    const teeth = 12;
+    const innerR = 0.6;
+    const outerR = 1.0;
+    for (let i = 0; i < teeth; i++) {
+      const a1 = (i / teeth) * Math.PI * 2;
+      const a2 = ((i + 0.3) / teeth) * Math.PI * 2;
+      const a3 = ((i + 0.5) / teeth) * Math.PI * 2;
+      const a4 = ((i + 0.8) / teeth) * Math.PI * 2;
+      const fn = i === 0 ? "moveTo" : "lineTo";
+      shape[fn](Math.cos(a1) * innerR, Math.sin(a1) * innerR);
+      shape.lineTo(Math.cos(a2) * outerR, Math.sin(a2) * outerR);
+      shape.lineTo(Math.cos(a3) * outerR, Math.sin(a3) * outerR);
+      shape.lineTo(Math.cos(a4) * innerR, Math.sin(a4) * innerR);
+    }
+    // Center hole
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, 0.25, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+    return new THREE.ExtrudeGeometry(shape, { depth: 0.25, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2 });
+  }, []);
+
+  useFrame((_, delta) => {
+    if (meshRef.current) meshRef.current.rotation.z += delta * 0.3;
+  });
+
+  return (
+    <mesh ref={meshRef} geometry={gearGeo} position={position} scale={scale}>
+      <meshStandardMaterial color={color} metalness={0.7} roughness={0.2} />
+    </mesh>
+  );
+}
+
 /* ── Main 3D Scene ── */
 function PrintScene() {
   const groupRef = useRef();
@@ -131,6 +168,56 @@ function PrintScene() {
             roughness={0.1}
             envMapIntensity={2}
           />
+        </mesh>
+      </Float>
+
+      {/* Gear 1 */}
+      <Float speed={2} rotationIntensity={0.6} floatIntensity={0.8}>
+        <GearShape position={[-1.8, 1.2, -0.5]} scale={0.5} color="#333333" />
+      </Float>
+
+      {/* Gear 2 — smaller */}
+      <Float speed={1.8} rotationIntensity={0.5} floatIntensity={0.7}>
+        <GearShape position={[1.5, -1, 0.3]} scale={0.35} color="#FFB347" />
+      </Float>
+
+      {/* Floating Cube — representing 3D print layers */}
+      <Float speed={2.2} rotationIntensity={0.8} floatIntensity={0.9}>
+        <mesh position={[-1.2, -1.3, 0.5]} rotation={[0.5, 0.7, 0]}>
+          <boxGeometry args={[0.5, 0.5, 0.5]} />
+          <meshStandardMaterial color="#1A1A1A" metalness={0.6} roughness={0.3} />
+        </mesh>
+      </Float>
+
+      {/* Floating Octahedron — geometric */}
+      <Float speed={1.6} rotationIntensity={0.7} floatIntensity={0.5}>
+        <mesh position={[1.8, 1.3, -0.3]} rotation={[0.3, 0.4, 0]}>
+          <octahedronGeometry args={[0.4]} />
+          <meshStandardMaterial color="#FF8000" metalness={0.9} roughness={0.05} envMapIntensity={3} />
+        </mesh>
+      </Float>
+
+      {/* Small Icosahedron */}
+      <Float speed={2.5} rotationIntensity={1} floatIntensity={1}>
+        <mesh position={[0.3, 1.8, 0.2]}>
+          <icosahedronGeometry args={[0.25, 0]} />
+          <meshStandardMaterial color="#E0E0E0" metalness={0.5} roughness={0.4} />
+        </mesh>
+      </Float>
+
+      {/* Small Torus — ring detail */}
+      <Float speed={1.4} rotationIntensity={0.3} floatIntensity={0.4}>
+        <mesh position={[-0.5, -0.2, 1]} rotation={[Math.PI / 3, 0, 0]}>
+          <torusGeometry args={[0.3, 0.08, 16, 32]} />
+          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.2} />
+        </mesh>
+      </Float>
+
+      {/* Cylinder — nozzle-like */}
+      <Float speed={1.2} rotationIntensity={0.2} floatIntensity={0.6}>
+        <mesh position={[0.8, -1.6, -0.4]} rotation={[0.2, 0, 0.5]}>
+          <cylinderGeometry args={[0.06, 0.15, 0.6, 16]} />
+          <meshStandardMaterial color="#FF8000" metalness={0.8} roughness={0.15} />
         </mesh>
       </Float>
     </group>
