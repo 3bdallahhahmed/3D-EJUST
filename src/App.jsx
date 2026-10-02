@@ -398,7 +398,7 @@ function NotFoundPage() {
 
 const DEFAULT_CONFIG = {
   id: 1,
-  brand_name: "JUST print",
+  brand_name: "Etba3ly",
   hero_title: "Your Idea.\nMade Real.",
   hero_subtitle: "Upload your 3D design, pick your material, and we'll print it for you — fast, affordable, and right here on campus.",
   why_title: "Why Print With Us?",
@@ -1066,7 +1066,8 @@ export default function App() {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-page)' }}>
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/></div>
-        <div className="card" style={{ maxWidth: 420, width: "100%", position: "relative", zIndex: 10 }}>
+        <div className="card" style={{ maxWidth: 420, width: "100%", position: "relative", zIndex: 10, textAlign: "center" }}>
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Etba3ly" className="brand-logo-img" style={{ height: 42, margin: '0 auto 20px', display: 'block' }} />
           <h2 style={{ fontSize: 26, marginBottom: 8 }}>Admin Access</h2>
           <p style={{ fontSize: 14, marginBottom: 24 }}>Log in with your Supabase credentials.</p>
           <div style={{ marginBottom: 16 }}><input placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} /></div>
@@ -1086,7 +1087,8 @@ export default function App() {
       <div className="admin-container">
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/><div className="bg-orb bg-orb-3"/></div>
         <div style={{ position: "relative", zIndex: 10 }}>
-          <div className="admin-header" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          <div className="admin-header" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
+            <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Etba3ly" className="brand-logo-img" style={{ height: 34, display: 'block' }} />
             <h1 style={{ fontSize: 36, margin: 0, flex: 1 }}>Command Center</h1>
             <button className="btn btn-glass" onClick={exportCSV}>Export CSV</button>
             <button className="btn btn-glass" onClick={handleAdminLogout}>Sign Out</button>
@@ -1587,7 +1589,7 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════
   // PUBLIC WEBSITE
   // ═══════════════════════════════════════════════════════════
-  const brandName = config.brand_name || "JUST print";
+  const brandName = (config.brand_name && config.brand_name !== "JUST print" && config.brand_name !== "PrintQueue") ? config.brand_name : "Etba3ly";
 
   return (
     <>
@@ -1622,7 +1624,9 @@ export default function App() {
 
       {/* Navigation */}
       <nav className="header">
-        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)}><div className="logo-dot" /> {config.brand_name || "PrintQueue"}</a>
+        <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)} aria-label={brandName}>
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={brandName} className="brand-logo-img" />
+        </a>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button className="theme-toggle mobile-theme-toggle" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle Dark Mode" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "8px", display: "flex", alignItems: "center" }}>
@@ -2212,7 +2216,9 @@ export default function App() {
       <footer className="site-footer">
         <div className="footer-grid">
           <div>
-            <div className="footer-brand"><div className="dot" /> {brandName}</div>
+            <div className="footer-brand">
+              <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={brandName} className="footer-logo-img" />
+            </div>
             <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 14, margin: 0 }}>Student-powered 3D printing. Fast, affordable, on campus.</p>
           </div>
           <div className="footer-col">

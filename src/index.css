@@ -247,13 +247,29 @@ body {
 }
 
 .logo {
-  font-size: 20px;
-  font-weight: 900;
-  letter-spacing: -0.03em;
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.brand-logo-img {
+  height: 38px;
+  width: auto;
+  max-width: 170px;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.25s var(--ease-smooth), opacity 0.25s var(--ease-smooth);
+}
+
+.logo:hover .brand-logo-img {
+  transform: scale(1.03);
+}
+
+/* Light theme: Invert white artwork to crisp dark */
+[data-theme="light"] .brand-logo-img {
+  filter: brightness(0) opacity(0.88);
 }
 
 .logo-dot {
@@ -703,10 +719,17 @@ label {
 }
 
 .footer-brand {
-  font-size: 22px; font-weight: 900;
-  color: #fff; letter-spacing: -0.03em;
-  margin-bottom: 12px;
-  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.footer-logo-img {
+  height: 42px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  display: block;
 }
 
 .footer-brand .dot {
@@ -1283,6 +1306,11 @@ label {
   .logo {
     font-size: 17px;
     gap: 8px;
+  }
+
+  .brand-logo-img {
+    height: 30px;
+    max-width: 135px;
   }
 
   /* --- Typography --- */
