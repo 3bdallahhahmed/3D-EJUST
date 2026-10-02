@@ -96,43 +96,6 @@ function SceneLoader() {
   );
 }
 
-/* ── Gear Shape (3D printing icon) ── */
-function GearShape({ position, scale = 1, color = "#FF8000" }) {
-  const meshRef = useRef();
-  const gearGeo = useMemo(() => {
-    const shape = new THREE.Shape();
-    const teeth = 12;
-    const innerR = 0.6;
-    const outerR = 1.0;
-    for (let i = 0; i < teeth; i++) {
-      const a1 = (i / teeth) * Math.PI * 2;
-      const a2 = ((i + 0.3) / teeth) * Math.PI * 2;
-      const a3 = ((i + 0.5) / teeth) * Math.PI * 2;
-      const a4 = ((i + 0.8) / teeth) * Math.PI * 2;
-      const fn = i === 0 ? "moveTo" : "lineTo";
-      shape[fn](Math.cos(a1) * innerR, Math.sin(a1) * innerR);
-      shape.lineTo(Math.cos(a2) * outerR, Math.sin(a2) * outerR);
-      shape.lineTo(Math.cos(a3) * outerR, Math.sin(a3) * outerR);
-      shape.lineTo(Math.cos(a4) * innerR, Math.sin(a4) * innerR);
-    }
-    // Center hole
-    const hole = new THREE.Path();
-    hole.absarc(0, 0, 0.25, 0, Math.PI * 2, true);
-    shape.holes.push(hole);
-    return new THREE.ExtrudeGeometry(shape, { depth: 0.25, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2 });
-  }, []);
-
-  useFrame((_, delta) => {
-    if (meshRef.current) meshRef.current.rotation.z += delta * 0.3;
-  });
-
-  return (
-    <mesh ref={meshRef} geometry={gearGeo} position={position} scale={scale}>
-      <meshStandardMaterial color={color} metalness={0.7} roughness={0.2} />
-    </mesh>
-  );
-}
-
 /* ── Main 3D Scene ── */
 function PrintScene() {
   const groupRef = useRef();
@@ -170,56 +133,6 @@ function PrintScene() {
           />
         </mesh>
       </Float>
-
-      {/* Gear 1 */}
-      <Float speed={2} rotationIntensity={0.6} floatIntensity={0.8}>
-        <GearShape position={[-1.8, 1.2, -0.5]} scale={0.5} color="#333333" />
-      </Float>
-
-      {/* Gear 2 — smaller */}
-      <Float speed={1.8} rotationIntensity={0.5} floatIntensity={0.7}>
-        <GearShape position={[1.5, -1, 0.3]} scale={0.35} color="#FFB347" />
-      </Float>
-
-      {/* Floating Cube — representing 3D print layers */}
-      <Float speed={2.2} rotationIntensity={0.8} floatIntensity={0.9}>
-        <mesh position={[-1.2, -1.3, 0.5]} rotation={[0.5, 0.7, 0]}>
-          <boxGeometry args={[0.5, 0.5, 0.5]} />
-          <meshStandardMaterial color="#1A1A1A" metalness={0.6} roughness={0.3} />
-        </mesh>
-      </Float>
-
-      {/* Floating Octahedron — geometric */}
-      <Float speed={1.6} rotationIntensity={0.7} floatIntensity={0.5}>
-        <mesh position={[1.8, 1.3, -0.3]} rotation={[0.3, 0.4, 0]}>
-          <octahedronGeometry args={[0.4]} />
-          <meshStandardMaterial color="#FF8000" metalness={0.9} roughness={0.05} envMapIntensity={3} />
-        </mesh>
-      </Float>
-
-      {/* Small Icosahedron */}
-      <Float speed={2.5} rotationIntensity={1} floatIntensity={1}>
-        <mesh position={[0.3, 1.8, 0.2]}>
-          <icosahedronGeometry args={[0.25, 0]} />
-          <meshStandardMaterial color="#E0E0E0" metalness={0.5} roughness={0.4} />
-        </mesh>
-      </Float>
-
-      {/* Small Torus — ring detail */}
-      <Float speed={1.4} rotationIntensity={0.3} floatIntensity={0.4}>
-        <mesh position={[-0.5, -0.2, 1]} rotation={[Math.PI / 3, 0, 0]}>
-          <torusGeometry args={[0.3, 0.08, 16, 32]} />
-          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.2} />
-        </mesh>
-      </Float>
-
-      {/* Cylinder — nozzle-like */}
-      <Float speed={1.2} rotationIntensity={0.2} floatIntensity={0.6}>
-        <mesh position={[0.8, -1.6, -0.4]} rotation={[0.2, 0, 0.5]}>
-          <cylinderGeometry args={[0.06, 0.15, 0.6, 16]} />
-          <meshStandardMaterial color="#FF8000" metalness={0.8} roughness={0.15} />
-        </mesh>
-      </Float>
     </group>
   );
 }
@@ -255,65 +168,6 @@ const CubeIcon = () => (
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.25 }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
 );
 
-// ═══════════════════════════════════════════════════════════
-// FLOATING 3D ICONS COMPONENT
-// ═══════════════════════════════════════════════════════════
-function FloatingIcons({ icons }) {
-  const [scrollY, setScrollY] = useState(0);
-
-  useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          setScrollY(window.scrollY);
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  return (
-    <div className="floating-icons-container">
-      {icons.map((icon, idx) => {
-        const speed = icon.parallaxSpeed || (idx % 2 === 0 ? 0.35 : -0.25);
-        const yOffset = scrollY * speed;
-
-        return (
-          <div 
-            key={idx}
-            style={{
-              position: 'absolute',
-              top: icon.top,
-              bottom: icon.bottom,
-              left: icon.left,
-              right: icon.right,
-              transform: `translateY(${yOffset}px)`,
-              transition: 'transform 0.1s cubic-bezier(0.2, 0, 0.2, 1)',
-              zIndex: 0
-            }}
-          >
-            <img
-              src={`${import.meta.env.BASE_URL}assets/icons/${icon.src}`}
-              className="floating-icon"
-              style={{
-                width: icon.size,
-                animation: `${icon.reverse ? 'floatIconReverse' : 'floatIcon'} ${icon.duration || '6s'} ease-in-out infinite alternate`,
-                animationDelay: icon.delay || '0s',
-                opacity: icon.opacity || 0.85,
-                position: 'static'
-              }}
-              alt=""
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════
 // STATUS STEPPER
@@ -2053,11 +1907,6 @@ export default function App() {
           <>
         {/* ── HERO ── */}
         <section id="home" className="section-container animate-in">
-          <FloatingIcons icons={[
-            { src: '1.png', size: 140, top: '15%', left: '-25%', delay: '0s', duration: '6s' },
-            { src: '2.png', size: 100, bottom: '20%', right: '-25%', delay: '1s', duration: '7s', reverse: true },
-            { src: '20.png', size: 80, top: '5%', right: '-10%', delay: '2s', duration: '5s' }
-          ]} />
           <h1>{config.hero_title}</h1>
           <p>{config.hero_subtitle}</p>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -2073,10 +1922,6 @@ export default function App() {
 
         {/* ── WHY US ── */}
         <section id="why" className="section-container reveal">
-          <FloatingIcons icons={[
-            { src: '5.png', size: 120, top: '5%', right: '-25%', delay: '0.5s', duration: '6.5s' },
-            { src: '6.png', size: 90, bottom: '10%', left: '-25%', delay: '1.5s', duration: '5.5s', reverse: true }
-          ]} />
           <h2>{config.why_title}</h2>
           <p>{config.why_text}</p>
           <div className="feature-cards">
@@ -2096,10 +1941,6 @@ export default function App() {
 
         {/* -- GALLERY -- */}
         <section id="gallery" className="gallery-section reveal">
-          <FloatingIcons icons={[
-            { src: '22.png', size: 110, top: '20%', left: '-25%', delay: '1s', duration: '6s' },
-            { src: '7.png', size: 85, bottom: '15%', right: '-25%', delay: '0s', duration: '7s', reverse: true }
-          ]} />
           <div style={{ textAlign: "center", marginBottom: 56 }}>
             <h2>Our Work</h2>
             <p style={{ maxWidth: 500, margin: "0 auto" }}>Some of the parts we've printed. Your project could be next.</p>
