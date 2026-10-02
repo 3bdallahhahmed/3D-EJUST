@@ -502,6 +502,14 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
+  // Preload both logo variants for instant dark/light switching
+  useEffect(() => {
+    const dark = new Image();
+    dark.src = `${import.meta.env.BASE_URL}logo-dark.svg`;
+    const light = new Image();
+    light.src = `${import.meta.env.BASE_URL}logo-light.svg`;
+  }, []);
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.setAttribute("data-theme", "dark");
@@ -1008,7 +1016,7 @@ export default function App() {
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-page)' }}>
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/></div>
         <div className="card" style={{ maxWidth: 420, width: "100%", position: "relative", zIndex: 10, textAlign: "center" }}>
-          <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt="Etba3ly" className="brand-logo-img" style={{ height: 42, margin: '0 auto 20px', display: 'block' }} />
+          <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt="Etba3ly" className="brand-logo-img admin-logo" style={{ height: 42, margin: '0 auto 20px', display: 'block' }} />
           <h2 style={{ fontSize: 26, marginBottom: 8 }}>Admin Access</h2>
           <p style={{ fontSize: 14, marginBottom: 24 }}>Log in with your Supabase credentials.</p>
           <div style={{ marginBottom: 16 }}><input placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} /></div>
@@ -1029,7 +1037,7 @@ export default function App() {
         <div className="bg-orbs"><div className="bg-orb bg-orb-1"/><div className="bg-orb bg-orb-2"/><div className="bg-orb bg-orb-3"/></div>
         <div style={{ position: "relative", zIndex: 10 }}>
           <div className="admin-header" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
-            <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt="Etba3ly" className="brand-logo-img" style={{ height: 34, display: 'block' }} />
+            <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt="Etba3ly" className="brand-logo-img admin-logo" style={{ height: 34, display: 'block' }} />
             <h1 style={{ fontSize: 36, margin: 0, flex: 1 }}>Command Center</h1>
             <button className="btn btn-glass" onClick={exportCSV}>Export CSV</button>
             <button className="btn btn-glass" onClick={handleAdminLogout}>Sign Out</button>
@@ -1566,7 +1574,7 @@ export default function App() {
       {/* Navigation */}
       <nav className="header">
         <a href="#home" className="logo" style={{ textDecoration: "none" }} onClick={() => setMobileMenuOpen(false)} aria-label={brandName}>
-          <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt={brandName} className="brand-logo-img" />
+          <img src={`${import.meta.env.BASE_URL}${darkMode ? "logo-dark.svg" : "logo-light.svg"}`} alt={brandName} className="brand-logo-img nav-logo" />
         </a>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -2161,7 +2169,7 @@ export default function App() {
         <div className="footer-grid">
           <div>
             <div className="footer-brand">
-              <img src={`${import.meta.env.BASE_URL}logo-dark.svg`} alt={brandName} className="footer-logo-img" />
+              <img src={`${import.meta.env.BASE_URL}logo-dark.svg`} alt={brandName} className="footer-logo-img footer-logo" />
             </div>
             <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 14, margin: 0 }}>Student-powered 3D printing. Fast, affordable, on campus.</p>
           </div>

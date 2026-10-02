@@ -260,7 +260,13 @@ body {
   max-width: 170px;
   object-fit: contain;
   display: block;
-  transition: transform 0.25s var(--ease-smooth), opacity 0.25s var(--ease-smooth);
+  transition: transform 0.25s var(--ease-smooth), opacity 0.15s ease-in-out;
+}
+
+.nav-logo,
+.footer-logo,
+.admin-logo {
+  transition: opacity 0.15s ease-in-out, transform 0.25s var(--ease-smooth);
 }
 
 .logo:hover .brand-logo-img {
